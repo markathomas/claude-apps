@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod error;
 pub mod ffmpeg;
+pub mod media_repo;
 pub mod model;
 pub mod paths;
 pub mod project_io;
@@ -9,6 +10,7 @@ pub mod recent;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .manage(media_repo::MediaRepo::default())
         .invoke_handler(tauri::generate_handler![
             commands::new_project,
             commands::open_project,

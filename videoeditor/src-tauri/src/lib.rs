@@ -5,6 +5,7 @@ pub mod media_repo;
 pub mod model;
 pub mod paths;
 pub mod project_io;
+pub mod proxy_worker;
 pub mod recent;
 
 pub fn run() {

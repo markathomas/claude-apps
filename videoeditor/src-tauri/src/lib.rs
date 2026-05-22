@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 pub mod commands;
 pub mod error;
 pub mod ffmpeg;
@@ -9,9 +11,23 @@ pub mod proxy_worker;
 pub mod recent;
 
 pub fn run() {
+    let (handle, rx) = proxy_worker::channel();
+    let repo = Arc::new(media_repo::MediaRepo::default());
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(media_repo::MediaRepo::default())
+        .manage(repo.clone())
+        .manage(handle)
+        .setup(move |app| {
+            let app_handle = app.handle().clone();
+            let repo = repo.clone();
+            tauri::async_runtime::spawn(async move {
+                let emitter: Arc<dyn proxy_worker::EventEmitter> =
+                    Arc::new(proxy_worker::TauriEmitter::new(app_handle));
+                proxy_worker::run_worker_loop(rx, repo, emitter).await;
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::new_project,
             commands::open_project,

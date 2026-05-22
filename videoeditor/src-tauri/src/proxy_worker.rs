@@ -218,6 +218,24 @@ async fn run_waveform(job: &ProxyJob) -> Result<(), String> {
     Ok(())
 }
 
+use tauri::Emitter as _;
+
+pub struct TauriEmitter {
+    app: tauri::AppHandle,
+}
+
+impl TauriEmitter {
+    pub fn new(app: tauri::AppHandle) -> Self {
+        Self { app }
+    }
+}
+
+impl EventEmitter for TauriEmitter {
+    fn emit(&self, name: &str, payload: serde_json::Value) {
+        let _ = self.app.emit(name, payload);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

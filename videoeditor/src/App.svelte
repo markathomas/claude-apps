@@ -1,6 +1,12 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import MenuBar from '$lib/components/MenuBar.svelte';
   import PaneLayout from '$lib/components/PaneLayout.svelte';
+  import { mediaActions } from '$lib/stores/mediaStore';
+
+  onMount(() => {
+    void mediaActions.initialize();
+  });
 </script>
 
 <div class="app">

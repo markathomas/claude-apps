@@ -199,10 +199,12 @@ async fn run_waveform(job: &ProxyJob) -> Result<(), String> {
         .await
         .map_err(|e| e.to_string())?;
     if !status.success() {
+        let _ = std::fs::remove_file(&tmp);
         return Err(format!("waveform ffmpeg exited with {status}"));
     }
-    let pcm = std::fs::read(&tmp).map_err(|e| e.to_string())?;
+    let pcm_result = std::fs::read(&tmp);
     let _ = std::fs::remove_file(&tmp);
+    let pcm = pcm_result.map_err(|e| e.to_string())?;
     let peaks = compute_peaks(&pcm, 8000, WAVEFORM_BUCKET_MS);
     let waveform = Waveform {
         bucket_ms: WAVEFORM_BUCKET_MS,

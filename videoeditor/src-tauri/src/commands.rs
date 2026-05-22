@@ -101,7 +101,7 @@ pub async fn import_media(
             has_audio: probe.has_audio,
             duration_ms: probe.duration_ms,
         };
-        worker.enqueue(job).map_err(|e| AppError::InvalidPath(e))?;
+        worker.enqueue(job).map_err(AppError::InvalidPath)?;
 
         imported.push(item);
     }

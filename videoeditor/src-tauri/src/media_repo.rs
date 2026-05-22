@@ -29,7 +29,7 @@ impl MediaRepo {
     pub fn list(&self) -> AppResult<Vec<MediaItem>> {
         let map = self.inner.lock().map_err(|_| poisoned())?;
         let mut items: Vec<MediaItem> = map.values().cloned().collect();
-        items.sort_by(|a, b| a.id.cmp(&b.id));
+        items.sort_by_key(|a| a.id);
         Ok(items)
     }
 

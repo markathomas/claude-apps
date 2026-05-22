@@ -23,11 +23,14 @@ impl RecentRegistry {
     pub fn touch(&mut self, path: &Path, name: &str) {
         let path_str = path.to_string_lossy().to_string();
         self.items.retain(|r| r.path != path_str);
-        self.items.insert(0, RecentProject {
-            path: path_str,
-            name: name.to_string(),
-            last_opened: Utc::now(),
-        });
+        self.items.insert(
+            0,
+            RecentProject {
+                path: path_str,
+                name: name.to_string(),
+                last_opened: Utc::now(),
+            },
+        );
         self.items.truncate(MAX_RECENT);
     }
 

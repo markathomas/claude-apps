@@ -5,14 +5,14 @@ use crate::error::{AppError, AppResult};
 pub const APP_DIR_NAME: &str = "videoeditor";
 
 pub fn config_dir() -> AppResult<PathBuf> {
-    let base = dirs::config_dir()
-        .ok_or_else(|| AppError::InvalidPath("config dir unavailable".into()))?;
+    let base =
+        dirs::config_dir().ok_or_else(|| AppError::InvalidPath("config dir unavailable".into()))?;
     Ok(base.join(APP_DIR_NAME))
 }
 
 pub fn cache_dir() -> AppResult<PathBuf> {
-    let base = dirs::cache_dir()
-        .ok_or_else(|| AppError::InvalidPath("cache dir unavailable".into()))?;
+    let base =
+        dirs::cache_dir().ok_or_else(|| AppError::InvalidPath("cache dir unavailable".into()))?;
     Ok(base.join(APP_DIR_NAME))
 }
 
@@ -46,7 +46,10 @@ mod tests {
     #[test]
     fn config_dir_ends_with_app_name() {
         let p = config_dir().unwrap();
-        assert!(p.ends_with(APP_DIR_NAME), "expected dir ending with {APP_DIR_NAME}, got {p:?}");
+        assert!(
+            p.ends_with(APP_DIR_NAME),
+            "expected dir ending with {APP_DIR_NAME}, got {p:?}"
+        );
     }
 
     #[test]

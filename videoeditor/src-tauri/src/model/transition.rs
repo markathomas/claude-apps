@@ -20,7 +20,10 @@ pub struct TransitionSpec {
 
 impl Default for TransitionSpec {
     fn default() -> Self {
-        Self { kind: TransitionType::Cut, duration_ms: 0 }
+        Self {
+            kind: TransitionType::Cut,
+            duration_ms: 0,
+        }
     }
 }
 

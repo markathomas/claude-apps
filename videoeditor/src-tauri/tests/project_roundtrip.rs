@@ -21,7 +21,10 @@ fn loads_empty_v1_fixture() {
 fn corrupt_fixture_is_rejected() {
     let err = load_project(&fixture("corrupt.vproj")).unwrap_err();
     let msg = err.to_string();
-    assert!(msg.contains("corrupt"), "expected corrupt error, got: {msg}");
+    assert!(
+        msg.contains("corrupt"),
+        "expected corrupt error, got: {msg}"
+    );
 }
 
 #[test]

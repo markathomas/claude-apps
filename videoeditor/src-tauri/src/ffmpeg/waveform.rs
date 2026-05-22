@@ -13,11 +13,15 @@ pub struct Waveform {
 pub fn build_waveform_args(input: &Path, raw_pcm_out: &Path) -> Vec<String> {
     vec![
         "-y".into(),
-        "-i".into(), input.to_string_lossy().into(),
+        "-i".into(),
+        input.to_string_lossy().into(),
         "-vn".into(),
-        "-ac".into(), "1".into(),
-        "-ar".into(), "8000".into(),
-        "-f".into(), "s16le".into(),
+        "-ac".into(),
+        "1".into(),
+        "-ar".into(),
+        "8000".into(),
+        "-f".into(),
+        "s16le".into(),
         raw_pcm_out.to_string_lossy().into(),
     ]
 }
@@ -35,7 +39,9 @@ pub fn compute_peaks(pcm_s16le: &[u8], sample_rate: u32, bucket_ms: u64) -> Vec<
             let hi = pcm_s16le[s * 2 + 1];
             let sample = i16::from_le_bytes([lo, hi]);
             let abs_sample = sample.saturating_abs();
-            if abs_sample > max { max = abs_sample; }
+            if abs_sample > max {
+                max = abs_sample;
+            }
         }
         peaks.push(max as f32 / i16::MAX as f32);
         i = end;

@@ -8,9 +8,12 @@ pub fn build_thumbnails_args(input: &Path, out_dir: &Path) -> Vec<String> {
     let fps_expr = 1000.0 / THUMB_INTERVAL_MS as f64;
     vec![
         "-y".into(),
-        "-i".into(), input.to_string_lossy().into(),
-        "-vf".into(), format!("fps={fps_expr},scale=-2:{THUMB_HEIGHT}"),
-        "-q:v".into(), "5".into(),
+        "-i".into(),
+        input.to_string_lossy().into(),
+        "-vf".into(),
+        format!("fps={fps_expr},scale=-2:{THUMB_HEIGHT}"),
+        "-q:v".into(),
+        "5".into(),
         pattern.to_string_lossy().into(),
     ]
 }

@@ -31,9 +31,15 @@ pub struct AudioClip {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TextAnchor {
-    Tl, Tc, Tr,
-    Ml, Mc, Mr,
-    Bl, Bc, Br,
+    Tl,
+    Tc,
+    Tr,
+    Ml,
+    Mc,
+    Mr,
+    Bl,
+    Bc,
+    Br,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -107,7 +113,10 @@ mod tests {
             volume: 0.8,
             muted: false,
             transition_in: TransitionSpec::default(),
-            transition_out: TransitionSpec { kind: TransitionType::Fade, duration_ms: 500 },
+            transition_out: TransitionSpec {
+                kind: TransitionType::Fade,
+                duration_ms: 500,
+            },
         };
         let json = serde_json::to_string(&clip).unwrap();
         let parsed: VideoClip = serde_json::from_str(&json).unwrap();
@@ -135,11 +144,18 @@ mod tests {
                 bg_color: None,
                 bg_opacity: None,
             },
-            position: TextPosition { x_pct: 50.0, y_pct: 50.0, anchor: TextAnchor::Mc },
+            position: TextPosition {
+                x_pct: 50.0,
+                y_pct: 50.0,
+                anchor: TextAnchor::Mc,
+            },
             kind: TextKind::Title,
         };
         let json = serde_json::to_string(&clip).unwrap();
-        assert!(!json.contains("bg_color"), "bg_color should be omitted when None");
+        assert!(
+            !json.contains("bg_color"),
+            "bg_color should be omitted when None"
+        );
         let parsed: TextClip = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed, clip);
     }

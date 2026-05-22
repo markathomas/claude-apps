@@ -31,14 +31,17 @@ pub const SUPPORTED_VIDEO_CODECS: &[&str] = &[
 ];
 
 pub fn parse_ffprobe_json(json: &str) -> AppResult<Probe> {
-    let parsed: FfprobeOutput = serde_json::from_str(json)
-        .map_err(AppError::Json)?;
+    let parsed: FfprobeOutput = serde_json::from_str(json).map_err(AppError::Json)?;
 
-    let video = parsed.streams.iter()
+    let video = parsed
+        .streams
+        .iter()
         .find(|s| s.codec_type == "video")
         .ok_or_else(|| AppError::InvalidPath("no video stream".into()))?;
 
-    let video_codec = video.codec_name.clone()
+    let video_codec = video
+        .codec_name
+        .clone()
         .ok_or_else(|| AppError::InvalidPath("video codec missing".into()))?;
 
     if !SUPPORTED_VIDEO_CODECS.contains(&video_codec.as_str()) {
@@ -47,17 +50,24 @@ pub fn parse_ffprobe_json(json: &str) -> AppResult<Probe> {
         )));
     }
 
-    let width = video.width
+    let width = video
+        .width
         .ok_or_else(|| AppError::InvalidPath("width missing".into()))?;
-    let height = video.height
+    let height = video
+        .height
         .ok_or_else(|| AppError::InvalidPath("height missing".into()))?;
 
-    let fps = video.avg_frame_rate.as_ref()
+    let fps = video
+        .avg_frame_rate
+        .as_ref()
         .or(video.r_frame_rate.as_ref())
         .and_then(|s| parse_rational(s))
         .unwrap_or(0.0);
 
-    let duration_secs: f64 = parsed.format.duration.as_deref()
+    let duration_secs: f64 = parsed
+        .format
+        .duration
+        .as_deref()
         .and_then(|s| s.parse().ok())
         .unwrap_or(0.0);
     let duration_ms = (duration_secs * 1000.0) as u64;
@@ -81,14 +91,20 @@ fn parse_rational(s: &str) -> Option<f32> {
     let mut parts = s.split('/');
     let num: f32 = parts.next()?.parse().ok()?;
     let denom: f32 = parts.next()?.parse().ok()?;
-    if denom == 0.0 { None } else { Some(num / denom) }
+    if denom == 0.0 {
+        None
+    } else {
+        Some(num / denom)
+    }
 }
 
 pub async fn probe_file(path: &Path) -> AppResult<Probe> {
     let output = Command::new("ffprobe")
         .args([
-            "-v", "error",
-            "-print_format", "json",
+            "-v",
+            "error",
+            "-print_format",
+            "json",
             "-show_streams",
             "-show_format",
         ])

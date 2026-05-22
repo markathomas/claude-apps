@@ -19,9 +19,10 @@ pub fn load_project(path: &Path) -> AppResult<Project> {
         return Err(AppError::ProjectNotFound(path.to_path_buf()));
     }
     let bytes = std::fs::read(path)?;
-    let project: Project = serde_json::from_slice(&bytes).map_err(|e| {
-        AppError::ProjectCorrupt { message: e.to_string() }
-    })?;
+    let project: Project =
+        serde_json::from_slice(&bytes).map_err(|e| AppError::ProjectCorrupt {
+            message: e.to_string(),
+        })?;
     if project.version != PROJECT_VERSION {
         return Err(AppError::UnsupportedVersion {
             found: project.version,

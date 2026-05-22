@@ -1,15 +1,15 @@
 <script lang="ts">
-  // Foundation shell — replaced in subsequent tasks.
+  import PaneLayout from '$lib/components/PaneLayout.svelte';
 </script>
 
-<main>
-  <h1>VideoEditor</h1>
-  <p>Foundation skeleton.</p>
-</main>
+<div class="app">
+  <PaneLayout />
+</div>
 
 <style>
-  main {
-    font-family: system-ui, sans-serif;
-    padding: 2rem;
+  .app {
+    height: 100vh;
+    display: grid;
+    grid-template-rows: 1fr;
   }
 </style>

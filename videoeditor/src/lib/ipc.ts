@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { Project, RecentProject } from './types';
+import type { MediaItem, Project, RecentProject } from './types';
 
 export const ipc = {
   newProject(name: string): Promise<Project> {
@@ -13,5 +13,14 @@ export const ipc = {
   },
   getRecentProjects(): Promise<RecentProject[]> {
     return invoke('get_recent_projects', undefined);
+  },
+  importMedia(paths: string[]): Promise<MediaItem[]> {
+    return invoke('import_media', { paths });
+  },
+  deleteMedia(id: string): Promise<void> {
+    return invoke('delete_media', { id });
+  },
+  listMedia(): Promise<MediaItem[]> {
+    return invoke('list_media', undefined);
   },
 };

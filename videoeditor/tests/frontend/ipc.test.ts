@@ -51,4 +51,23 @@ describe('ipc', () => {
     expect(mockInvoke).toHaveBeenCalledWith('get_recent_projects', undefined);
     expect(r).toEqual([]);
   });
+
+  it('importMedia calls import_media with paths', async () => {
+    mockInvoke.mockResolvedValueOnce([]);
+    await ipc.importMedia(['/abs/a.mp4', '/abs/b.mp4']);
+    expect(mockInvoke).toHaveBeenCalledWith('import_media', { paths: ['/abs/a.mp4', '/abs/b.mp4'] });
+  });
+
+  it('deleteMedia calls delete_media with id', async () => {
+    mockInvoke.mockResolvedValueOnce(null);
+    await ipc.deleteMedia('abc-123');
+    expect(mockInvoke).toHaveBeenCalledWith('delete_media', { id: 'abc-123' });
+  });
+
+  it('listMedia calls list_media', async () => {
+    mockInvoke.mockResolvedValueOnce([]);
+    const r = await ipc.listMedia();
+    expect(mockInvoke).toHaveBeenCalledWith('list_media', undefined);
+    expect(r).toEqual([]);
+  });
 });

@@ -1,3 +1,4 @@
+pub mod error;
 pub mod model;
 
 pub fn run() {

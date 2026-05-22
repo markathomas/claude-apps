@@ -1,4 +1,6 @@
 use serde::Deserialize;
+use std::path::Path;
+use tokio::process::Command;
 
 use crate::error::{AppError, AppResult};
 use crate::model::project::Probe;
@@ -82,9 +84,41 @@ fn parse_rational(s: &str) -> Option<f32> {
     if denom == 0.0 { None } else { Some(num / denom) }
 }
 
+pub async fn probe_file(path: &Path) -> AppResult<Probe> {
+    let output = Command::new("ffprobe")
+        .args([
+            "-v", "error",
+            "-print_format", "json",
+            "-show_streams",
+            "-show_format",
+        ])
+        .arg(path)
+        .output()
+        .await
+        .map_err(AppError::Io)?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(AppError::InvalidPath(format!(
+            "ffprobe failed: {}",
+            stderr.trim()
+        )));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    parse_ffprobe_json(&stdout)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
+
+    fn fixture(name: &str) -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/media")
+            .join(name)
+    }
 
     #[test]
     fn parse_h264_with_audio() {
@@ -155,5 +189,22 @@ mod tests {
         assert_eq!(parse_rational("30/0"), None);
         assert_eq!(parse_rational("not a rational"), None);
         assert_eq!(parse_rational(""), None);
+    }
+
+    #[tokio::test]
+    async fn probe_file_returns_metadata_for_real_video() {
+        let path = fixture("tiny.mp4");
+        let probe = probe_file(&path).await.unwrap();
+        assert!(probe.duration_ms > 0);
+        assert!(probe.width > 0);
+        assert!(probe.height > 0);
+        assert!(!probe.video_codec.is_empty());
+    }
+
+    #[tokio::test]
+    async fn probe_file_errors_on_missing_file() {
+        let path = std::path::PathBuf::from("/does/not/exist.mp4");
+        let err = probe_file(&path).await.unwrap_err();
+        assert!(err.to_string().contains("ffprobe failed") || err.to_string().contains("io"));
     }
 }

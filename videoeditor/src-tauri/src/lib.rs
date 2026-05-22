@@ -2,6 +2,7 @@ pub mod error;
 pub mod model;
 pub mod paths;
 pub mod project_io;
+pub mod recent;
 
 pub fn run() {
     tauri::Builder::default()

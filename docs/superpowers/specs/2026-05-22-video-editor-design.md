@@ -1,8 +1,8 @@
-# Video Editor — Design Spec
+# VideoEditor — Design Spec
 
 **Date:** 2026-05-22
 **Status:** Approved (design phase)
-**Working title:** TBD
+**App name:** VideoEditor
 
 ## 1. Purpose
 
@@ -11,7 +11,7 @@ A Linux desktop video editor scoped for **quick clip work**: trim, splice, light
 ## 2. Tech stack
 
 - **Shell:** Tauri 2 (Rust backend, system webview frontend)
-- **Frontend:** SolidJS (preferred) or Svelte, with TypeScript and Vite
+- **Frontend:** Svelte (with TypeScript and Vite)
 - **Backend language:** Rust
 - **Video engine:** FFmpeg as a bundled external binary, invoked as a subprocess; `ffprobe` for media inspection
 - **Packaging:** AppImage primary; `.deb` and Flatpak as follow-ups
@@ -302,4 +302,4 @@ These are deliberately deferred but worth recording so they're not lost:
 - **Multi-track video:** likely the first big post-v1 expansion. The current data model has room (`video_track` is already an array; would become `video_tracks: VideoClip[][]`).
 - **Auto-captions:** Whisper integration as an optional component. Would slot into the existing `text_track` data model.
 - **Project portability:** "copy media into project folder" mode for moving projects between machines.
-- **App name and icon:** TBD before first packaged release.
+- **App icon:** TBD before first packaged release.

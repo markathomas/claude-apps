@@ -13,9 +13,10 @@ export interface MediaItemView extends MediaItem {
 interface MediaState {
   items: MediaItemView[];
   initialized: boolean;
+  selectedId: string | null;
 }
 
-const initial: MediaState = { items: [], initialized: false };
+const initial: MediaState = { items: [], initialized: false, selectedId: null };
 
 export const mediaStore = writable<MediaState>(initial);
 
@@ -63,7 +64,7 @@ export const mediaActions = {
     });
 
     const items = await ipc.listMedia();
-    mediaStore.set({ items, initialized: true });
+    mediaStore.update((s) => ({ ...s, items, initialized: true }));
   },
 
   async importMedia(paths: string[]): Promise<void> {
@@ -71,8 +72,16 @@ export const mediaActions = {
     mediaStore.update((s) => ({ ...s, items: [...s.items, ...newItems] }));
   },
 
+  selectItem(id: string | null): void {
+    mediaStore.update((s) => ({ ...s, selectedId: id }));
+  },
+
   async deleteMedia(id: string): Promise<void> {
     await ipc.deleteMedia(id);
-    mediaStore.update((s) => ({ ...s, items: s.items.filter((i) => i.id !== id) }));
+    mediaStore.update((s) => ({
+      ...s,
+      items: s.items.filter((i) => i.id !== id),
+      selectedId: s.selectedId === id ? null : s.selectedId,
+    }));
   },
 };

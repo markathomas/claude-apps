@@ -101,4 +101,38 @@ describe('mediaStore', () => {
     expect(mockInvoke).toHaveBeenCalledWith('delete_media', { id: 'm1' });
     expect(get(mediaStore).items).toEqual([]);
   });
+
+  it('selectItem sets selectedId', async () => {
+    mockInvoke.mockResolvedValueOnce([mediaItem]);
+    await mediaActions.initialize();
+    mediaActions.selectItem('m1');
+    expect(get(mediaStore).selectedId).toBe('m1');
+  });
+
+  it('selectItem can be cleared to null', async () => {
+    mockInvoke.mockResolvedValueOnce([mediaItem]);
+    await mediaActions.initialize();
+    mediaActions.selectItem('m1');
+    mediaActions.selectItem(null);
+    expect(get(mediaStore).selectedId).toBeNull();
+  });
+
+  it('deleteMedia clears selectedId when the selected item is deleted', async () => {
+    mockInvoke.mockResolvedValueOnce([mediaItem]);
+    await mediaActions.initialize();
+    mediaActions.selectItem('m1');
+    mockInvoke.mockResolvedValueOnce(null);
+    await mediaActions.deleteMedia('m1');
+    expect(get(mediaStore).selectedId).toBeNull();
+  });
+
+  it('deleteMedia preserves selectedId when a different item is deleted', async () => {
+    const other = { ...mediaItem, id: 'm2', source_path: '/b.mp4' };
+    mockInvoke.mockResolvedValueOnce([mediaItem, other]);
+    await mediaActions.initialize();
+    mediaActions.selectItem('m1');
+    mockInvoke.mockResolvedValueOnce(null);
+    await mediaActions.deleteMedia('m2');
+    expect(get(mediaStore).selectedId).toBe('m1');
+  });
 });

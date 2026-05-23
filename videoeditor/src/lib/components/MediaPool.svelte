@@ -2,6 +2,10 @@
   import { open as openDialog } from '@tauri-apps/plugin-dialog';
   import { mediaStore, mediaActions } from '$lib/stores/mediaStore';
 
+  function handleSelect(id: string) {
+    mediaActions.selectItem(id);
+  }
+
   async function handleImport() {
     const picked = await openDialog({
       multiple: true,
@@ -42,29 +46,41 @@
   {:else}
     <ul>
       {#each $mediaStore.items as item (item.id)}
-        <li class="item" data-status={item.proxy_status}>
-          <div class="row">
-            <span class="name" title={item.source_path}>{basename(item.source_path)}</span>
-            <button type="button" class="delete" onclick={() => handleDelete(item.id)} aria-label="Remove">×</button>
-          </div>
-          <div class="meta">
-            {#if item.probe}
-              <span>{item.probe.width}×{item.probe.height}</span>
-              <span>{formatDuration(item.probe.duration_ms)}</span>
-              {#if !item.probe.has_audio}<span class="muted-tag">no audio</span>{/if}
-            {/if}
-          </div>
-          <div class="status">
-            {#if item.proxy_status === 'pending'}
-              <span class="badge pending">queued</span>
-            {:else if item.proxy_status === 'generating'}
-              <span class="badge generating">proxy {Math.round(item.progress ?? 0)}%</span>
-            {:else if item.proxy_status === 'ready'}
-              <span class="badge ready">ready</span>
-            {:else if item.proxy_status === 'failed'}
-              <span class="badge failed" title={item.error ?? ''}>failed</span>
-            {/if}
-          </div>
+        <li class="item" class:selected={$mediaStore.selectedId === item.id} data-status={item.proxy_status}>
+          <button
+            type="button"
+            class="item-select"
+            onclick={() => handleSelect(item.id)}
+            aria-pressed={$mediaStore.selectedId === item.id}
+          >
+            <div class="row">
+              <span class="name" title={item.source_path}>{basename(item.source_path)}</span>
+            </div>
+            <div class="meta">
+              {#if item.probe}
+                <span>{item.probe.width}×{item.probe.height}</span>
+                <span>{formatDuration(item.probe.duration_ms)}</span>
+                {#if !item.probe.has_audio}<span class="muted-tag">no audio</span>{/if}
+              {/if}
+            </div>
+            <div class="status">
+              {#if item.proxy_status === 'pending'}
+                <span class="badge pending">queued</span>
+              {:else if item.proxy_status === 'generating'}
+                <span class="badge generating">proxy {Math.round(item.progress ?? 0)}%</span>
+              {:else if item.proxy_status === 'ready'}
+                <span class="badge ready">ready</span>
+              {:else if item.proxy_status === 'failed'}
+                <span class="badge failed" title={item.error ?? ''}>failed</span>
+              {/if}
+            </div>
+          </button>
+          <button
+            type="button"
+            class="delete"
+            onclick={() => handleDelete(item.id)}
+            aria-label="Remove"
+          >×</button>
         </li>
       {/each}
     </ul>
@@ -83,17 +99,24 @@
   .placeholder { font-size: 0.875rem; opacity: 0.6; }
   ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.4rem; }
   .item {
-    background: #1f1f1f; padding: 0.5rem; border-radius: 4px;
-    border-left: 3px solid #555;
+    position: relative; background: #1f1f1f; border-radius: 4px;
+    border-left: 3px solid #555; display: flex; align-items: stretch;
   }
+  .item.selected { background: #252d3a; outline: 1px solid #2563eb; }
   .item[data-status="ready"] { border-left-color: #22c55e; }
   .item[data-status="failed"] { border-left-color: #ef4444; }
   .item[data-status="generating"] { border-left-color: #2563eb; }
-  .row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+  .item-select {
+    flex: 1; background: transparent; border: 0; color: inherit;
+    text-align: left; padding: 0.5rem; cursor: pointer; min-width: 0;
+  }
+  .item-select:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; border-radius: 4px; }
+  .row { display: flex; align-items: center; gap: 0.5rem; }
   .name { font-size: 0.875rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .delete {
     background: transparent; border: 0; color: inherit; opacity: 0.5;
-    font-size: 1rem; line-height: 1; cursor: pointer; padding: 0 0.25rem;
+    font-size: 1rem; line-height: 1; cursor: pointer; padding: 0.5rem 0.5rem;
+    align-self: flex-start;
   }
   .delete:hover { opacity: 1; }
   .meta { display: flex; gap: 0.5rem; font-size: 0.75rem; opacity: 0.6; margin-top: 0.25rem; }

@@ -1,4 +1,4 @@
-import { writable, get } from 'svelte/store';
+import { writable, derived, get, type Readable } from 'svelte/store';
 import { listen } from '@tauri-apps/api/event';
 import { ipc } from '$lib/ipc';
 import type { MediaItem } from '$lib/types';
@@ -35,6 +35,40 @@ function update(id: string, patch: Partial<MediaItemView>) {
     items: s.items.map((i) => (i.id === id ? { ...i, ...patch } : i)),
   }));
 }
+
+export interface PreviewSource {
+  id: string;
+  proxyPath: string;
+}
+
+function samePreview(a: PreviewSource | null, b: PreviewSource | null): boolean {
+  if (a === null || b === null) return a === b;
+  return a.id === b.id && a.proxyPath === b.proxyPath;
+}
+
+// Emits only when the selected clip's ready proxy path changes.
+// Importing or generating proxies for other clips must not change this value
+// (otherwise the preview restarts mid-playback).
+export const selectedPreviewSource: Readable<PreviewSource | null> = (() => {
+  let last: PreviewSource | null = null;
+  return derived<typeof mediaStore, PreviewSource | null>(
+    mediaStore,
+    ($s, set) => {
+      let next: PreviewSource | null = null;
+      if ($s.selectedId) {
+        const item = $s.items.find((i) => i.id === $s.selectedId);
+        if (item && item.proxy_status === 'ready' && item.proxy_path) {
+          next = { id: item.id, proxyPath: item.proxy_path };
+        }
+      }
+      if (!samePreview(last, next)) {
+        last = next;
+        set(next);
+      }
+    },
+    null,
+  );
+})();
 
 export const mediaActions = {
   reset(): void {

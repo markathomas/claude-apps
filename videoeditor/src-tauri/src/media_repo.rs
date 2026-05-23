@@ -1,10 +1,11 @@
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Mutex;
 
 use uuid::Uuid;
 
 use crate::error::{AppError, AppResult};
-use crate::model::project::{MediaItem, Probe, ProxyStatus};
+use crate::model::project::{MediaItem, Probe, Project, ProxyStatus};
 
 #[derive(Default)]
 pub struct MediaRepo {
@@ -63,6 +64,32 @@ impl MediaRepo {
             if proxy_path.is_some() {
                 item.proxy_path = proxy_path;
             }
+        }
+        Ok(())
+    }
+
+    pub fn reconcile_from_project(&self, project: &Project) -> AppResult<()> {
+        let mut map = self.inner.lock().map_err(|_| poisoned())?;
+        map.clear();
+        for source in &project.media_pool {
+            let proxy_ready = source
+                .proxy_path
+                .as_deref()
+                .map(|p| Path::new(p).exists())
+                .unwrap_or(false);
+            let proxy_status = if proxy_ready {
+                ProxyStatus::Ready
+            } else {
+                ProxyStatus::Pending
+            };
+            let item = MediaItem {
+                id: source.id,
+                source_path: source.source_path.clone(),
+                proxy_path: source.proxy_path.clone(),
+                proxy_status,
+                probe: source.probe.clone(),
+            };
+            map.insert(item.id, item);
         }
         Ok(())
     }

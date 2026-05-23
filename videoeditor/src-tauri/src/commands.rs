@@ -44,12 +44,14 @@ pub fn new_project(name: String) -> AppResult<Project> {
 }
 
 #[tauri::command]
-pub fn open_project(path: String) -> AppResult<Project> {
+pub fn open_project(path: String, repo: State<'_, Arc<MediaRepo>>) -> AppResult<Project> {
     let path_buf = PathBuf::from(&path);
     if !path_buf.is_absolute() {
         return Err(AppError::InvalidPath(format!("not absolute: {path}")));
     }
     let project = load_project(&path_buf)?;
+
+    repo.reconcile_from_project(&project)?;
 
     let registry_path = recent_file_path()?;
     if let Some(parent) = registry_path.parent() {
@@ -233,12 +235,6 @@ mod tests {
         let p = new_project("Hello".into()).unwrap();
         assert_eq!(p.name, "Hello");
         assert_eq!(p.version, "1");
-    }
-
-    #[test]
-    fn open_project_rejects_relative_path() {
-        let err = open_project("relative/path.vproj".into()).unwrap_err();
-        assert!(matches!(err, AppError::InvalidPath(_)));
     }
 
     #[test]

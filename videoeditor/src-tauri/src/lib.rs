@@ -36,6 +36,7 @@ pub fn run() {
             commands::import_media,
             commands::delete_media,
             commands::list_media,
+            commands::list_thumbnails,
             commands::timeline_insert_clip,
             commands::timeline_move_clip,
             commands::timeline_trim_clip,

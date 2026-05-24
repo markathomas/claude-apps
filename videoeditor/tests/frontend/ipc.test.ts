@@ -70,4 +70,15 @@ describe('ipc', () => {
     expect(mockInvoke).toHaveBeenCalledWith('list_media', undefined);
     expect(r).toEqual([]);
   });
+
+  it('listThumbnails calls list_thumbnails with mediaId', async () => {
+    mockInvoke.mockResolvedValueOnce([
+      { time_ms: 0, path: '/thumbs/abc/thumb_00001.jpg' },
+      { time_ms: 1000, path: '/thumbs/abc/thumb_00002.jpg' },
+    ]);
+    const r = await ipc.listThumbnails('abc-123');
+    expect(mockInvoke).toHaveBeenCalledWith('list_thumbnails', { mediaId: 'abc-123' });
+    expect(r).toHaveLength(2);
+    expect(r[0]).toEqual({ time_ms: 0, path: '/thumbs/abc/thumb_00001.jpg' });
+  });
 });

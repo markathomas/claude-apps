@@ -7,7 +7,7 @@ use uuid::Uuid;
 use crate::error::{AppError, AppResult};
 use crate::ffmpeg::probe::probe_file;
 use crate::ffmpeg::proxy::proxy_path_for;
-use crate::ffmpeg::thumbnails::thumbnails_dir_for;
+use crate::ffmpeg::thumbnails::{list_thumbnails_in_dir, thumbnails_dir_for, ThumbEntry};
 use crate::ffmpeg::waveform::waveform_path_for;
 use crate::media_repo::MediaRepo;
 use crate::model::project::{MediaItem, Project};
@@ -143,6 +143,13 @@ pub fn delete_media(id: String, repo: State<'_, Arc<MediaRepo>>) -> AppResult<()
 #[tauri::command]
 pub fn list_media(repo: State<'_, Arc<MediaRepo>>) -> AppResult<Vec<MediaItem>> {
     repo.list()
+}
+
+#[tauri::command]
+pub fn list_thumbnails(media_id: String) -> AppResult<Vec<ThumbEntry>> {
+    let thumbs_root = thumbnails_dir()?;
+    let dir = thumbnails_dir_for(&thumbs_root, &media_id);
+    list_thumbnails_in_dir(&dir)
 }
 
 #[tauri::command]

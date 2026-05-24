@@ -112,3 +112,8 @@ export interface RecentProject {
   name: string;
   last_opened: string;
 }
+
+export interface ThumbEntry {
+  time_ms: number;
+  path: string;
+}

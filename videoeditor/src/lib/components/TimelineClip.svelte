@@ -3,6 +3,7 @@
   import { msToPx, pxToMs } from '$lib/lib/time';
   import { snap, type SnapEdge } from '$lib/lib/snap';
   import { timelineStore, timelineActions } from '$lib/stores/timelineStore';
+  import ClipFilmstrip from './ClipFilmstrip.svelte';
 
   interface Props {
     clip: VideoClip | AudioClip;
@@ -187,6 +188,14 @@
   onpointerup={handlePointerUp}
   onpointercancel={handlePointerCancel}
 >
+  {#if kind === 'video'}
+    <ClipFilmstrip
+      mediaId={clip.media_id}
+      sourceInMs={trimming ? draftSourceInMs : clip.source_in_ms}
+      sourceOutMs={trimming ? draftSourceOutMs : clip.source_out_ms}
+      {pxPerSec}
+    />
+  {/if}
   <div
     class="trim-handle trim-handle-left"
     role="slider"
@@ -251,6 +260,7 @@
     z-index: 3;
   }
   .label {
+    position: relative;
     display: block;
     padding: 0.15rem 0.35rem;
     font-size: 0.7rem;
@@ -259,6 +269,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
     pointer-events: none;
+    text-shadow: 0 0 2px rgba(0, 0, 0, 0.85);
+    z-index: 1;
   }
   .trim-handle {
     position: absolute;

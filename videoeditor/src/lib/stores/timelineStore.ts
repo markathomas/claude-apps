@@ -106,6 +106,33 @@ export const timelineActions = {
     }
   },
 
+  async trimClip(
+    track: TimelineTrack,
+    clipId: string,
+    newSourceInMs: number,
+    newSourceOutMs: number,
+  ): Promise<void> {
+    const inMs = Math.max(0, Math.round(newSourceInMs));
+    const outMs = Math.max(0, Math.round(newSourceOutMs));
+    if (outMs <= inMs) return;
+    const current = get(internal).timeline;
+    try {
+      const next = await ipc.timelineTrimClip(
+        current,
+        track,
+        clipId,
+        inMs,
+        outMs,
+        true,
+        undefined,
+      );
+      timelineActions.apply(next);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('trimClip failed:', message);
+    }
+  },
+
   async insertClipFromMedia(mediaId: string, dropMs: number): Promise<void> {
     const item = get(mediaStore).items.find((i) => i.id === mediaId);
     if (!item || item.proxy_status !== 'ready' || !item.probe) return;

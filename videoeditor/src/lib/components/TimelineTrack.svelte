@@ -4,6 +4,7 @@
   import { msToPx, pxToMs } from '$lib/lib/time';
   import type { SnapEdge } from '$lib/lib/snap';
   import { timelineActions } from '$lib/stores/timelineStore';
+  import { mediaStore } from '$lib/stores/mediaStore';
 
   interface Props {
     kind: 'video' | 'audio';
@@ -13,6 +14,13 @@
   }
 
   const { kind, clips, pxPerSec, widthPx }: Props = $props();
+
+  const mediaItems = $derived($mediaStore.items);
+
+  function mediaDurationFor(mediaId: string): number {
+    const item = mediaItems.find((i) => i.id === mediaId);
+    return item?.probe?.duration_ms ?? 0;
+  }
 
   const MEDIA_MIME = 'application/x-videoeditor-media-id';
 
@@ -71,6 +79,7 @@
       {kind}
       track={kind}
       siblingEdges={edgesExcluding(clip.id)}
+      mediaDurationMs={mediaDurationFor(clip.media_id)}
       onSnapPreview={(ms) => (snapPreviewMs = ms)}
     />
   {/each}

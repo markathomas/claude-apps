@@ -10,10 +10,12 @@
     kind: 'video' | 'audio';
     track: 'video' | 'audio';
     siblingEdges: readonly SnapEdge[];
+    mediaDurationMs: number;
     onSnapPreview?: (ms: number | null) => void;
   }
 
   const SNAP_THRESHOLD_MS = 166;
+  const MIN_CLIP_DURATION_MS = 1;
 
   const {
     clip,
@@ -21,18 +23,40 @@
     kind,
     track,
     siblingEdges,
+    mediaDurationMs,
     onSnapPreview,
   }: Props = $props();
+
+  let dragging = $state(false);
+  let dragOffsetPx = $state(0);
+  let pointerStartX = 0;
+  let originalStartMs = 0;
+
+  let trimming = $state<null | 'left' | 'right'>(null);
+  let trimPointerStartX = 0;
+  let originalSourceInMs = 0;
+  let originalSourceOutMs = 0;
+  let draftSourceInMs = $state(0);
+  let draftSourceOutMs = $state(0);
 
   const baseLeft = $derived(msToPx(clip.timeline_start_ms, pxPerSec));
   const width = $derived(
     msToPx(clip.source_out_ms - clip.source_in_ms, pxPerSec),
   );
 
-  let dragging = $state(false);
-  let dragOffsetPx = $state(0);
-  let pointerStartX = 0;
-  let originalStartMs = 0;
+  const renderedLeft = $derived(
+    trimming === 'left'
+      ? msToPx(
+          clip.timeline_start_ms + (draftSourceInMs - clip.source_in_ms),
+          pxPerSec,
+        )
+      : baseLeft,
+  );
+  const renderedWidth = $derived(
+    trimming
+      ? Math.max(1, msToPx(draftSourceOutMs - draftSourceInMs, pxPerSec))
+      : width,
+  );
 
   function candidateStartMs(deltaPx: number): number {
     const deltaMs = pxToMs(deltaPx, pxPerSec);
@@ -86,6 +110,61 @@
     dragOffsetPx = 0;
     onSnapPreview?.(null);
   }
+
+  function startTrim(e: PointerEvent, side: 'left' | 'right') {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const target = e.currentTarget as HTMLDivElement;
+    target.setPointerCapture(e.pointerId);
+    trimPointerStartX = e.clientX;
+    originalSourceInMs = clip.source_in_ms;
+    originalSourceOutMs = clip.source_out_ms;
+    draftSourceInMs = clip.source_in_ms;
+    draftSourceOutMs = clip.source_out_ms;
+    trimming = side;
+  }
+
+  function moveTrim(e: PointerEvent) {
+    if (!trimming) return;
+    const deltaPx = e.clientX - trimPointerStartX;
+    const deltaMs = pxToMs(deltaPx, pxPerSec);
+    if (trimming === 'left') {
+      const min = 0;
+      const max = originalSourceOutMs - MIN_CLIP_DURATION_MS;
+      draftSourceInMs = Math.min(max, Math.max(min, originalSourceInMs + deltaMs));
+    } else {
+      const min = originalSourceInMs + MIN_CLIP_DURATION_MS;
+      const max = mediaDurationMs > 0 ? mediaDurationMs : originalSourceOutMs;
+      draftSourceOutMs = Math.min(max, Math.max(min, originalSourceOutMs + deltaMs));
+    }
+  }
+
+  async function endTrim(e: PointerEvent) {
+    if (!trimming) return;
+    const target = e.currentTarget as HTMLDivElement;
+    if (target.hasPointerCapture(e.pointerId)) {
+      target.releasePointerCapture(e.pointerId);
+    }
+    const finalIn = Math.round(draftSourceInMs);
+    const finalOut = Math.round(draftSourceOutMs);
+    const changed =
+      finalIn !== Math.round(originalSourceInMs) ||
+      finalOut !== Math.round(originalSourceOutMs);
+    trimming = null;
+    if (changed) {
+      await timelineActions.trimClip(track, clip.id, finalIn, finalOut);
+    }
+  }
+
+  function cancelTrim(e: PointerEvent) {
+    if (!trimming) return;
+    const target = e.currentTarget as HTMLDivElement;
+    if (target.hasPointerCapture(e.pointerId)) {
+      target.releasePointerCapture(e.pointerId);
+    }
+    trimming = null;
+  }
 </script>
 
 <div
@@ -93,7 +172,8 @@
   class:video={kind === 'video'}
   class:audio={kind === 'audio'}
   class:dragging
-  style="left: {baseLeft}px; width: {width}px; transform: translateX({dragOffsetPx}px)"
+  class:trimming={trimming !== null}
+  style="left: {renderedLeft}px; width: {renderedWidth}px; transform: translateX({dragOffsetPx}px)"
   data-clip-id={clip.id}
   role="button"
   tabindex="0"
@@ -103,7 +183,33 @@
   onpointerup={handlePointerUp}
   onpointercancel={handlePointerCancel}
 >
+  <div
+    class="trim-handle trim-handle-left"
+    role="slider"
+    tabindex="0"
+    aria-label="Trim clip start"
+    aria-valuemin={0}
+    aria-valuemax={clip.source_out_ms}
+    aria-valuenow={trimming === 'left' ? draftSourceInMs : clip.source_in_ms}
+    onpointerdown={(e) => startTrim(e, 'left')}
+    onpointermove={moveTrim}
+    onpointerup={endTrim}
+    onpointercancel={cancelTrim}
+  ></div>
   <span class="label">{clip.id.slice(0, 6)}</span>
+  <div
+    class="trim-handle trim-handle-right"
+    role="slider"
+    tabindex="0"
+    aria-label="Trim clip end"
+    aria-valuemin={clip.source_in_ms}
+    aria-valuemax={mediaDurationMs > 0 ? mediaDurationMs : clip.source_out_ms}
+    aria-valuenow={trimming === 'right' ? draftSourceOutMs : clip.source_out_ms}
+    onpointerdown={(e) => startTrim(e, 'right')}
+    onpointermove={moveTrim}
+    onpointerup={endTrim}
+    onpointercancel={cancelTrim}
+  ></div>
 </div>
 
 <style>
@@ -131,6 +237,10 @@
     z-index: 2;
     filter: brightness(1.2);
   }
+  .clip.trimming {
+    z-index: 2;
+    filter: brightness(1.2);
+  }
   .label {
     display: block;
     padding: 0.15rem 0.35rem;
@@ -140,5 +250,26 @@
     overflow: hidden;
     text-overflow: ellipsis;
     pointer-events: none;
+  }
+  .trim-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 6px;
+    cursor: ew-resize;
+    touch-action: none;
+    background: transparent;
+    z-index: 1;
+  }
+  .trim-handle:hover,
+  .trim-handle:focus-visible {
+    background: rgba(255, 255, 255, 0.35);
+    outline: none;
+  }
+  .trim-handle-left {
+    left: 0;
+  }
+  .trim-handle-right {
+    right: 0;
   }
 </style>

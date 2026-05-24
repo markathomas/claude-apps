@@ -348,6 +348,102 @@ describe('timelineActions.moveClip', () => {
   });
 });
 
+describe('timelineActions.trimClip', () => {
+  const sourceTimeline: Timeline = {
+    duration_ms: 4000,
+    video_track: [
+      {
+        id: 'clip-1',
+        media_id: 'media-1',
+        source_in_ms: 0,
+        source_out_ms: 4000,
+        timeline_start_ms: 0,
+        volume: 1,
+        muted: false,
+        transition_in: { type: 'cut', duration_ms: 0 },
+        transition_out: { type: 'cut', duration_ms: 0 },
+      },
+    ],
+    audio_track: [],
+    text_track: [],
+  };
+
+  const trimmedTimeline: Timeline = {
+    ...sourceTimeline,
+    video_track: [
+      {
+        ...sourceTimeline.video_track[0],
+        source_in_ms: 500,
+        source_out_ms: 3500,
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    mockInvoke.mockReset();
+    projectActions.reset();
+    timelineActions.reset(sourceTimeline);
+  });
+
+  it('invokes timeline_trim_clip with snap enabled and applies the result', async () => {
+    mockInvoke.mockResolvedValueOnce(trimmedTimeline);
+
+    await timelineActions.trimClip('video', 'clip-1', 500, 3500);
+
+    expect(mockInvoke).toHaveBeenCalledWith('timeline_trim_clip', {
+      timeline: sourceTimeline,
+      track: 'video',
+      clipId: 'clip-1',
+      newSourceInMs: 500,
+      newSourceOutMs: 3500,
+      snapEnabled: true,
+      snapThresholdMs: undefined,
+    });
+    expect(get(timelineStore).timeline).toEqual(trimmedTimeline);
+    expect(get(timelineStore).canUndo).toBe(true);
+  });
+
+  it('rounds non-integer source ms values', async () => {
+    mockInvoke.mockResolvedValueOnce(trimmedTimeline);
+
+    await timelineActions.trimClip('video', 'clip-1', 499.6, 3500.4);
+
+    expect(mockInvoke).toHaveBeenCalledWith(
+      'timeline_trim_clip',
+      expect.objectContaining({ newSourceInMs: 500, newSourceOutMs: 3500 }),
+    );
+  });
+
+  it('clamps newSourceInMs to >= 0', async () => {
+    mockInvoke.mockResolvedValueOnce(trimmedTimeline);
+
+    await timelineActions.trimClip('video', 'clip-1', -200, 3500);
+
+    expect(mockInvoke).toHaveBeenCalledWith(
+      'timeline_trim_clip',
+      expect.objectContaining({ newSourceInMs: 0 }),
+    );
+  });
+
+  it('is a no-op when newSourceOutMs <= newSourceInMs', async () => {
+    await timelineActions.trimClip('video', 'clip-1', 1000, 1000);
+    expect(mockInvoke).not.toHaveBeenCalled();
+
+    await timelineActions.trimClip('video', 'clip-1', 1500, 1000);
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('does not push undo history when the reducer rejects (throws)', async () => {
+    mockInvoke.mockRejectedValueOnce(new Error('overlap'));
+
+    await timelineActions.trimClip('video', 'clip-1', 500, 3500);
+
+    const s = get(timelineStore);
+    expect(s.timeline).toEqual(sourceTimeline);
+    expect(s.canUndo).toBe(false);
+  });
+});
+
 describe('projectActions.setTimeline', () => {
   beforeEach(() => {
     mockInvoke.mockReset();

@@ -75,7 +75,10 @@ pub fn list_thumbnails_in_dir(dir: &Path) -> AppResult<Vec<ThumbEntry>> {
             .to_str()
             .ok_or_else(|| AppError::InvalidPath(format!("non-utf8 thumbnail path: {path:?}")))?
             .to_string();
-        entries.push(ThumbEntry { time_ms, path: path_str });
+        entries.push(ThumbEntry {
+            time_ms,
+            path: path_str,
+        });
     }
     entries.sort_by_key(|e| e.time_ms);
     Ok(entries)

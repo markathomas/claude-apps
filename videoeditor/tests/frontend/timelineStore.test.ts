@@ -444,6 +444,176 @@ describe('timelineActions.trimClip', () => {
   });
 });
 
+describe('timelineActions.selectClip', () => {
+  beforeEach(() => {
+    mockInvoke.mockReset();
+    timelineActions.reset();
+  });
+
+  it('starts with selectedClipId === null', () => {
+    expect(get(timelineStore).selectedClipId).toBeNull();
+  });
+
+  it('selectClip sets the selected id', () => {
+    timelineActions.selectClip('clip-1');
+    expect(get(timelineStore).selectedClipId).toBe('clip-1');
+  });
+
+  it('selectClip(null) clears the selection', () => {
+    timelineActions.selectClip('clip-1');
+    timelineActions.selectClip(null);
+    expect(get(timelineStore).selectedClipId).toBeNull();
+  });
+
+  it('reset clears the selection', () => {
+    timelineActions.selectClip('clip-1');
+    timelineActions.reset();
+    expect(get(timelineStore).selectedClipId).toBeNull();
+  });
+});
+
+describe('timelineActions.splitSelectedAt', () => {
+  const sourceTimeline: Timeline = {
+    duration_ms: 4000,
+    video_track: [
+      {
+        id: 'clip-1',
+        media_id: 'media-1',
+        source_in_ms: 0,
+        source_out_ms: 4000,
+        timeline_start_ms: 0,
+        volume: 1,
+        muted: false,
+        transition_in: { type: 'cut', duration_ms: 0 },
+        transition_out: { type: 'cut', duration_ms: 0 },
+      },
+    ],
+    audio_track: [],
+    text_track: [],
+  };
+
+  const splitTimeline: Timeline = {
+    ...sourceTimeline,
+    video_track: [
+      { ...sourceTimeline.video_track[0], source_out_ms: 2000 },
+      {
+        ...sourceTimeline.video_track[0],
+        id: 'clip-2',
+        source_in_ms: 2000,
+        source_out_ms: 4000,
+        timeline_start_ms: 2000,
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    mockInvoke.mockReset();
+    projectActions.reset();
+    timelineActions.reset(sourceTimeline);
+  });
+
+  it('is a no-op when nothing is selected', async () => {
+    await timelineActions.splitSelectedAt(2000);
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('invokes timeline_split_clip on the track containing the selected clip', async () => {
+    timelineActions.selectClip('clip-1');
+    mockInvoke.mockResolvedValueOnce(splitTimeline);
+
+    await timelineActions.splitSelectedAt(2000);
+
+    expect(mockInvoke).toHaveBeenCalledWith('timeline_split_clip', {
+      timeline: sourceTimeline,
+      track: 'video',
+      clipId: 'clip-1',
+      atTimelineMs: 2000,
+    });
+    expect(get(timelineStore).timeline).toEqual(splitTimeline);
+    expect(get(timelineStore).canUndo).toBe(true);
+  });
+
+  it('rounds non-integer playhead', async () => {
+    timelineActions.selectClip('clip-1');
+    mockInvoke.mockResolvedValueOnce(splitTimeline);
+
+    await timelineActions.splitSelectedAt(1999.6);
+
+    expect(mockInvoke).toHaveBeenCalledWith(
+      'timeline_split_clip',
+      expect.objectContaining({ atTimelineMs: 2000 }),
+    );
+  });
+
+  it('is a no-op when the selected clip cannot be found', async () => {
+    timelineActions.selectClip('missing');
+    await timelineActions.splitSelectedAt(2000);
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+});
+
+describe('timelineActions.deleteSelected', () => {
+  const sourceTimeline: Timeline = {
+    duration_ms: 4000,
+    video_track: [
+      {
+        id: 'clip-1',
+        media_id: 'media-1',
+        source_in_ms: 0,
+        source_out_ms: 4000,
+        timeline_start_ms: 0,
+        volume: 1,
+        muted: false,
+        transition_in: { type: 'cut', duration_ms: 0 },
+        transition_out: { type: 'cut', duration_ms: 0 },
+      },
+    ],
+    audio_track: [],
+    text_track: [],
+  };
+
+  const emptiedTimeline: Timeline = {
+    ...sourceTimeline,
+    video_track: [],
+  };
+
+  beforeEach(() => {
+    mockInvoke.mockReset();
+    projectActions.reset();
+    timelineActions.reset(sourceTimeline);
+  });
+
+  it('is a no-op when nothing is selected', async () => {
+    await timelineActions.deleteSelected();
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('invokes timeline_delete_clip and clears the selection on success', async () => {
+    timelineActions.selectClip('clip-1');
+    mockInvoke.mockResolvedValueOnce(emptiedTimeline);
+
+    await timelineActions.deleteSelected();
+
+    expect(mockInvoke).toHaveBeenCalledWith('timeline_delete_clip', {
+      timeline: sourceTimeline,
+      track: 'video',
+      clipId: 'clip-1',
+    });
+    expect(get(timelineStore).timeline).toEqual(emptiedTimeline);
+    expect(get(timelineStore).selectedClipId).toBeNull();
+  });
+
+  it('keeps the selection when the reducer rejects', async () => {
+    timelineActions.selectClip('clip-1');
+    mockInvoke.mockRejectedValueOnce(new Error('boom'));
+
+    await timelineActions.deleteSelected();
+
+    expect(get(timelineStore).selectedClipId).toBe('clip-1');
+    expect(get(timelineStore).canUndo).toBe(false);
+  });
+});
+
 describe('projectActions.setTimeline', () => {
   beforeEach(() => {
     mockInvoke.mockReset();

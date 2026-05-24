@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { timelineStore } from '$lib/stores/timelineStore';
+  import { timelineStore, timelineActions } from '$lib/stores/timelineStore';
   import TimelineRuler from './TimelineRuler.svelte';
   import TimelineTrack from './TimelineTrack.svelte';
 
@@ -12,11 +12,60 @@
   );
   const widthPx = $derived(totalSeconds * PX_PER_SEC);
   const playheadPx = $derived((PLAYHEAD_MS / 1000) * PX_PER_SEC);
+
+  function isEditableTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) return false;
+    const tag = target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+    if (target.isContentEditable) return true;
+    return false;
+  }
+
+  function handleKeydown(e: KeyboardEvent) {
+    if (isEditableTarget(e.target)) return;
+
+    const cmdOrCtrl = e.metaKey || e.ctrlKey;
+
+    if (cmdOrCtrl && (e.key === 'z' || e.key === 'Z')) {
+      e.preventDefault();
+      if (e.shiftKey) {
+        timelineActions.redo();
+      } else {
+        timelineActions.undo();
+      }
+      return;
+    }
+
+    if (cmdOrCtrl && (e.key === 'y' || e.key === 'Y')) {
+      e.preventDefault();
+      timelineActions.redo();
+      return;
+    }
+
+    if (cmdOrCtrl) return;
+
+    if (e.key === 's' || e.key === 'S') {
+      e.preventDefault();
+      void timelineActions.splitSelectedAt(PLAYHEAD_MS);
+      return;
+    }
+
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      e.preventDefault();
+      void timelineActions.deleteSelected();
+    }
+  }
 </script>
 
-<section
+<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+<div
   class="pane timeline"
   style="--px-per-sec: {PX_PER_SEC}px"
+  tabindex="0"
+  role="application"
+  aria-label="Timeline"
+  onkeydown={handleKeydown}
 >
   <div class="scroll">
     <div class="content" style="width: {widthPx}px">
@@ -36,7 +85,7 @@
       <div class="playhead" style="left: {playheadPx}px"></div>
     </div>
   </div>
-</section>
+</div>
 
 <style>
   .pane {
@@ -45,6 +94,13 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
+  }
+  .pane:focus {
+    outline: none;
+  }
+  .pane:focus-visible {
+    outline: 1px solid #ffcb47;
+    outline-offset: -1px;
   }
   .scroll {
     flex: 1;

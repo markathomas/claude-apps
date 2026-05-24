@@ -2,7 +2,7 @@
   import type { VideoClip, AudioClip } from '$lib/types';
   import { msToPx, pxToMs } from '$lib/lib/time';
   import { snap, type SnapEdge } from '$lib/lib/snap';
-  import { timelineActions } from '$lib/stores/timelineStore';
+  import { timelineStore, timelineActions } from '$lib/stores/timelineStore';
 
   interface Props {
     clip: VideoClip | AudioClip;
@@ -39,6 +39,8 @@
   let draftSourceInMs = $state(0);
   let draftSourceOutMs = $state(0);
 
+  const isSelected = $derived($timelineStore.selectedClipId === clip.id);
+
   const baseLeft = $derived(msToPx(clip.timeline_start_ms, pxPerSec));
   const width = $derived(
     msToPx(clip.source_out_ms - clip.source_in_ms, pxPerSec),
@@ -67,6 +69,7 @@
 
   function handlePointerDown(e: PointerEvent) {
     if (e.button !== 0) return;
+    timelineActions.selectClip(clip.id);
     const target = e.currentTarget as HTMLDivElement;
     target.setPointerCapture(e.pointerId);
     pointerStartX = e.clientX;
@@ -173,6 +176,7 @@
   class:audio={kind === 'audio'}
   class:dragging
   class:trimming={trimming !== null}
+  class:selected={isSelected}
   style="left: {renderedLeft}px; width: {renderedWidth}px; transform: translateX({dragOffsetPx}px)"
   data-clip-id={clip.id}
   role="button"
@@ -240,6 +244,11 @@
   .clip.trimming {
     z-index: 2;
     filter: brightness(1.2);
+  }
+  .clip.selected {
+    outline: 2px solid #ffcb47;
+    outline-offset: 1px;
+    z-index: 3;
   }
   .label {
     display: block;

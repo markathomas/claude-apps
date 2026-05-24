@@ -1,5 +1,5 @@
 import { writable, get } from 'svelte/store';
-import type { Timeline } from '$lib/types';
+import type { Timeline, VideoClip, AudioClip } from '$lib/types';
 import { ipc, type TimelineTrack } from '$lib/ipc';
 import { mediaStore } from './mediaStore';
 import { projectActions } from './projectStore';
@@ -10,6 +10,7 @@ export interface TimelineState {
   timeline: Timeline;
   canUndo: boolean;
   canRedo: boolean;
+  selectedClipId: string | null;
 }
 
 function emptyTimeline(): Timeline {
@@ -19,10 +20,13 @@ function emptyTimeline(): Timeline {
 const undoStack: Timeline[] = [];
 const redoStack: Timeline[] = [];
 
+let selectedClipId: string | null = null;
+
 const internal = writable<TimelineState>({
   timeline: emptyTimeline(),
   canUndo: false,
   canRedo: false,
+  selectedClipId: null,
 });
 
 export const timelineStore = internal;
@@ -32,13 +36,26 @@ function publish(timeline: Timeline): void {
     timeline,
     canUndo: undoStack.length > 0,
     canRedo: redoStack.length > 0,
+    selectedClipId,
   });
+}
+
+function findClipTrack(
+  timeline: Timeline,
+  clipId: string,
+): { track: TimelineTrack; clip: VideoClip | AudioClip } | null {
+  const v = timeline.video_track.find((c) => c.id === clipId);
+  if (v) return { track: 'video', clip: v };
+  const a = timeline.audio_track.find((c) => c.id === clipId);
+  if (a) return { track: 'audio', clip: a };
+  return null;
 }
 
 export const timelineActions = {
   reset(timeline?: Timeline): void {
     undoStack.length = 0;
     redoStack.length = 0;
+    selectedClipId = null;
     publish(timeline ?? emptyTimeline());
   },
 
@@ -81,6 +98,11 @@ export const timelineActions = {
     undoStack.push(current);
     publish(next);
     projectActions.setTimeline(next);
+  },
+
+  selectClip(id: string | null): void {
+    selectedClipId = id;
+    internal.update((s) => ({ ...s, selectedClipId: id }));
   },
 
   async moveClip(
@@ -130,6 +152,42 @@ export const timelineActions = {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       console.error('trimClip failed:', message);
+    }
+  },
+
+  async splitSelectedAt(playheadMs: number): Promise<void> {
+    if (selectedClipId === null) return;
+    const current = get(internal).timeline;
+    const found = findClipTrack(current, selectedClipId);
+    if (!found) return;
+    const atMs = Math.max(0, Math.round(playheadMs));
+    try {
+      const next = await ipc.timelineSplitClip(
+        current,
+        found.track,
+        selectedClipId,
+        atMs,
+      );
+      timelineActions.apply(next);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('splitSelectedAt failed:', message);
+    }
+  },
+
+  async deleteSelected(): Promise<void> {
+    if (selectedClipId === null) return;
+    const current = get(internal).timeline;
+    const found = findClipTrack(current, selectedClipId);
+    if (!found) return;
+    const targetId = selectedClipId;
+    try {
+      const next = await ipc.timelineDeleteClip(current, found.track, targetId);
+      selectedClipId = null;
+      timelineActions.apply(next);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('deleteSelected failed:', message);
     }
   },
 

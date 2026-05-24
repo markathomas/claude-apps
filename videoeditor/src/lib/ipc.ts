@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { MediaItem, Project, RecentProject, ThumbEntry, Timeline } from './types';
+import type { MediaItem, Project, RecentProject, ThumbEntry, Timeline, Waveform } from './types';
 
 export type TimelineTrack = 'video' | 'audio';
 
@@ -27,6 +27,9 @@ export const ipc = {
   },
   listThumbnails(mediaId: string): Promise<ThumbEntry[]> {
     return invoke('list_thumbnails', { mediaId });
+  },
+  readWaveform(mediaId: string): Promise<Waveform> {
+    return invoke('read_waveform', { mediaId });
   },
   timelineInsertClip(
     timeline: Timeline,

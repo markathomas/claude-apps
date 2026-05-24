@@ -8,7 +8,7 @@ use crate::error::{AppError, AppResult};
 use crate::ffmpeg::probe::probe_file;
 use crate::ffmpeg::proxy::proxy_path_for;
 use crate::ffmpeg::thumbnails::{list_thumbnails_in_dir, thumbnails_dir_for, ThumbEntry};
-use crate::ffmpeg::waveform::waveform_path_for;
+use crate::ffmpeg::waveform::{waveform_path_for, Waveform};
 use crate::media_repo::MediaRepo;
 use crate::model::project::{MediaItem, Project};
 use crate::model::timeline::Timeline;
@@ -152,6 +152,20 @@ pub fn list_thumbnails(media_id: String) -> AppResult<Vec<ThumbEntry>> {
     list_thumbnails_in_dir(&dir)
 }
 
+pub fn read_waveform_from_dir(waves_root: &std::path::Path, media_id: &str) -> AppResult<Waveform> {
+    let path = waveform_path_for(waves_root, media_id);
+    let json = std::fs::read_to_string(&path).map_err(AppError::Io)?;
+    serde_json::from_str(&json).map_err(|e| AppError::Validation {
+        message: e.to_string(),
+    })
+}
+
+#[tauri::command]
+pub fn read_waveform(media_id: String) -> AppResult<Waveform> {
+    let waves_root = waveforms_dir()?;
+    read_waveform_from_dir(&waves_root, &media_id)
+}
+
 #[tauri::command]
 pub fn timeline_insert_clip(
     timeline: Timeline,
@@ -249,5 +263,28 @@ mod tests {
         let p = Project::new("X".into());
         let err = save_project_cmd(p, "relative/path.vproj".into()).unwrap_err();
         assert!(matches!(err, AppError::InvalidPath(_)));
+    }
+
+    #[test]
+    fn read_waveform_from_dir_parses_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let media_id = "abc-123";
+        let path = waveform_path_for(dir.path(), media_id);
+        std::fs::write(
+            &path,
+            r#"{"bucket_ms":100,"peaks":[0.0,0.25,0.5,0.75,1.0]}"#,
+        )
+        .unwrap();
+
+        let wf = read_waveform_from_dir(dir.path(), media_id).unwrap();
+        assert_eq!(wf.bucket_ms, 100);
+        assert_eq!(wf.peaks, vec![0.0, 0.25, 0.5, 0.75, 1.0]);
+    }
+
+    #[test]
+    fn read_waveform_from_dir_missing_file_returns_io_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let err = read_waveform_from_dir(dir.path(), "missing").unwrap_err();
+        assert!(matches!(err, AppError::Io(_)));
     }
 }

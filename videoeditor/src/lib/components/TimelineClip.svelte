@@ -4,6 +4,7 @@
   import { snap, type SnapEdge } from '$lib/lib/snap';
   import { timelineStore, timelineActions } from '$lib/stores/timelineStore';
   import ClipFilmstrip from './ClipFilmstrip.svelte';
+  import ClipWaveform from './ClipWaveform.svelte';
 
   interface Props {
     clip: VideoClip | AudioClip;
@@ -12,6 +13,7 @@
     track: 'video' | 'audio';
     siblingEdges: readonly SnapEdge[];
     mediaDurationMs: number;
+    hasAudio: boolean;
     onSnapPreview?: (ms: number | null) => void;
   }
 
@@ -25,6 +27,7 @@
     track,
     siblingEdges,
     mediaDurationMs,
+    hasAudio,
     onSnapPreview,
   }: Props = $props();
 
@@ -196,6 +199,16 @@
       {pxPerSec}
     />
   {/if}
+  {#if hasAudio}
+    <ClipWaveform
+      mediaId={clip.media_id}
+      sourceInMs={trimming ? draftSourceInMs : clip.source_in_ms}
+      sourceOutMs={trimming ? draftSourceOutMs : clip.source_out_ms}
+      {pxPerSec}
+    />
+  {:else if kind === 'audio'}
+    <span class="no-audio">no audio</span>
+  {/if}
   <div
     class="trim-handle trim-handle-left"
     role="slider"
@@ -268,6 +281,16 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    pointer-events: none;
+    text-shadow: 0 0 2px rgba(0, 0, 0, 0.85);
+    z-index: 1;
+  }
+  .no-audio {
+    position: absolute;
+    right: 0.35rem;
+    bottom: 0.15rem;
+    font-size: 0.6rem;
+    color: rgba(230, 237, 243, 0.55);
     pointer-events: none;
     text-shadow: 0 0 2px rgba(0, 0, 0, 0.85);
     z-index: 1;

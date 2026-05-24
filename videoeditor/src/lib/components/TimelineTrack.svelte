@@ -22,6 +22,11 @@
     return item?.probe?.duration_ms ?? 0;
   }
 
+  function hasAudioFor(mediaId: string): boolean {
+    const item = mediaItems.find((i) => i.id === mediaId);
+    return item?.probe?.has_audio ?? false;
+  }
+
   const MEDIA_MIME = 'application/x-videoeditor-media-id';
 
   let snapPreviewMs = $state<number | null>(null);
@@ -80,6 +85,7 @@
       track={kind}
       siblingEdges={edgesExcluding(clip.id)}
       mediaDurationMs={mediaDurationFor(clip.media_id)}
+      hasAudio={hasAudioFor(clip.media_id)}
       onSnapPreview={(ms) => (snapPreviewMs = ms)}
     />
   {/each}

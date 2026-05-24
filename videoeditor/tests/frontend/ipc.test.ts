@@ -70,4 +70,26 @@ describe('ipc', () => {
     expect(mockInvoke).toHaveBeenCalledWith('list_media', undefined);
     expect(r).toEqual([]);
   });
+
+  it('listThumbnails calls list_thumbnails with mediaId', async () => {
+    mockInvoke.mockResolvedValueOnce([
+      { time_ms: 0, path: '/thumbs/abc/thumb_00001.jpg' },
+      { time_ms: 1000, path: '/thumbs/abc/thumb_00002.jpg' },
+    ]);
+    const r = await ipc.listThumbnails('abc-123');
+    expect(mockInvoke).toHaveBeenCalledWith('list_thumbnails', { mediaId: 'abc-123' });
+    expect(r).toHaveLength(2);
+    expect(r[0]).toEqual({ time_ms: 0, path: '/thumbs/abc/thumb_00001.jpg' });
+  });
+
+  it('readWaveform calls read_waveform with mediaId', async () => {
+    mockInvoke.mockResolvedValueOnce({
+      bucket_ms: 100,
+      peaks: [0.0, 0.25, 0.5, 0.75, 1.0],
+    });
+    const r = await ipc.readWaveform('abc-123');
+    expect(mockInvoke).toHaveBeenCalledWith('read_waveform', { mediaId: 'abc-123' });
+    expect(r.bucket_ms).toBe(100);
+    expect(r.peaks).toHaveLength(5);
+  });
 });

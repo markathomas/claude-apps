@@ -1,5 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { MediaItem, Project, RecentProject } from './types';
+import type { MediaItem, Project, RecentProject, ThumbEntry, Timeline, Waveform } from './types';
+
+export type TimelineTrack = 'video' | 'audio';
 
 export const ipc = {
   newProject(name: string): Promise<Project> {
@@ -22,5 +24,84 @@ export const ipc = {
   },
   listMedia(): Promise<MediaItem[]> {
     return invoke('list_media', undefined);
+  },
+  listThumbnails(mediaId: string): Promise<ThumbEntry[]> {
+    return invoke('list_thumbnails', { mediaId });
+  },
+  readWaveform(mediaId: string): Promise<Waveform> {
+    return invoke('read_waveform', { mediaId });
+  },
+  timelineInsertClip(
+    timeline: Timeline,
+    track: TimelineTrack,
+    mediaId: string,
+    timelineStartMs: number,
+    sourceInMs: number,
+    sourceOutMs: number,
+  ): Promise<Timeline> {
+    return invoke('timeline_insert_clip', {
+      timeline,
+      track,
+      mediaId,
+      timelineStartMs,
+      sourceInMs,
+      sourceOutMs,
+    });
+  },
+  timelineMoveClip(
+    timeline: Timeline,
+    track: TimelineTrack,
+    clipId: string,
+    newStartMs: number,
+    snapEnabled: boolean,
+    snapThresholdMs?: number,
+  ): Promise<Timeline> {
+    return invoke('timeline_move_clip', {
+      timeline,
+      track,
+      clipId,
+      newStartMs,
+      snapEnabled,
+      snapThresholdMs,
+    });
+  },
+  timelineTrimClip(
+    timeline: Timeline,
+    track: TimelineTrack,
+    clipId: string,
+    newSourceInMs: number,
+    newSourceOutMs: number,
+    snapEnabled: boolean,
+    snapThresholdMs?: number,
+  ): Promise<Timeline> {
+    return invoke('timeline_trim_clip', {
+      timeline,
+      track,
+      clipId,
+      newSourceInMs,
+      newSourceOutMs,
+      snapEnabled,
+      snapThresholdMs,
+    });
+  },
+  timelineSplitClip(
+    timeline: Timeline,
+    track: TimelineTrack,
+    clipId: string,
+    atTimelineMs: number,
+  ): Promise<Timeline> {
+    return invoke('timeline_split_clip', {
+      timeline,
+      track,
+      clipId,
+      atTimelineMs,
+    });
+  },
+  timelineDeleteClip(
+    timeline: Timeline,
+    track: TimelineTrack,
+    clipId: string,
+  ): Promise<Timeline> {
+    return invoke('timeline_delete_clip', { timeline, track, clipId });
   },
 };

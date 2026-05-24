@@ -20,6 +20,9 @@ pub enum AppError {
 
     #[error("invalid path: {0}")]
     InvalidPath(String),
+
+    #[error("validation error: {message}")]
+    Validation { message: String },
 }
 
 pub type AppResult<T> = Result<T, AppError>;

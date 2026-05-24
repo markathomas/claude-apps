@@ -1,0 +1,319 @@
+<script lang="ts">
+  import type { VideoClip, AudioClip } from '$lib/types';
+  import { msToPx, pxToMs } from '$lib/lib/time';
+  import { snap, type SnapEdge } from '$lib/lib/snap';
+  import { timelineStore, timelineActions } from '$lib/stores/timelineStore';
+  import ClipFilmstrip from './ClipFilmstrip.svelte';
+  import ClipWaveform from './ClipWaveform.svelte';
+
+  interface Props {
+    clip: VideoClip | AudioClip;
+    pxPerSec: number;
+    kind: 'video' | 'audio';
+    track: 'video' | 'audio';
+    siblingEdges: readonly SnapEdge[];
+    mediaDurationMs: number;
+    hasAudio: boolean;
+    onSnapPreview?: (ms: number | null) => void;
+  }
+
+  const SNAP_THRESHOLD_MS = 166;
+  const MIN_CLIP_DURATION_MS = 1;
+
+  const {
+    clip,
+    pxPerSec,
+    kind,
+    track,
+    siblingEdges,
+    mediaDurationMs,
+    hasAudio,
+    onSnapPreview,
+  }: Props = $props();
+
+  let dragging = $state(false);
+  let dragOffsetPx = $state(0);
+  let pointerStartX = 0;
+  let originalStartMs = 0;
+
+  let trimming = $state<null | 'left' | 'right'>(null);
+  let trimPointerStartX = 0;
+  let originalSourceInMs = 0;
+  let originalSourceOutMs = 0;
+  let draftSourceInMs = $state(0);
+  let draftSourceOutMs = $state(0);
+
+  const isSelected = $derived($timelineStore.selectedClipId === clip.id);
+
+  const baseLeft = $derived(msToPx(clip.timeline_start_ms, pxPerSec));
+  const width = $derived(
+    msToPx(clip.source_out_ms - clip.source_in_ms, pxPerSec),
+  );
+
+  const renderedLeft = $derived(
+    trimming === 'left'
+      ? msToPx(
+          clip.timeline_start_ms + (draftSourceInMs - clip.source_in_ms),
+          pxPerSec,
+        )
+      : baseLeft,
+  );
+  const renderedWidth = $derived(
+    trimming
+      ? Math.max(1, msToPx(draftSourceOutMs - draftSourceInMs, pxPerSec))
+      : width,
+  );
+
+  function candidateStartMs(deltaPx: number): number {
+    const deltaMs = pxToMs(deltaPx, pxPerSec);
+    const candidate = Math.max(0, originalStartMs + deltaMs);
+    const result = snap(candidate, siblingEdges, SNAP_THRESHOLD_MS);
+    return result.snapped;
+  }
+
+  function handlePointerDown(e: PointerEvent) {
+    if (e.button !== 0) return;
+    timelineActions.selectClip(clip.id);
+    const target = e.currentTarget as HTMLDivElement;
+    target.setPointerCapture(e.pointerId);
+    pointerStartX = e.clientX;
+    originalStartMs = clip.timeline_start_ms;
+    dragOffsetPx = 0;
+    dragging = true;
+    e.preventDefault();
+  }
+
+  function handlePointerMove(e: PointerEvent) {
+    if (!dragging) return;
+    const deltaPx = e.clientX - pointerStartX;
+    const snappedMs = candidateStartMs(deltaPx);
+    dragOffsetPx = msToPx(snappedMs - originalStartMs, pxPerSec);
+    onSnapPreview?.(snappedMs);
+  }
+
+  async function handlePointerUp(e: PointerEvent) {
+    if (!dragging) return;
+    const target = e.currentTarget as HTMLDivElement;
+    if (target.hasPointerCapture(e.pointerId)) {
+      target.releasePointerCapture(e.pointerId);
+    }
+    const deltaPx = e.clientX - pointerStartX;
+    const finalMs = candidateStartMs(deltaPx);
+    dragging = false;
+    dragOffsetPx = 0;
+    onSnapPreview?.(null);
+    if (finalMs !== originalStartMs) {
+      await timelineActions.moveClip(track, clip.id, finalMs);
+    }
+  }
+
+  function handlePointerCancel(e: PointerEvent) {
+    if (!dragging) return;
+    const target = e.currentTarget as HTMLDivElement;
+    if (target.hasPointerCapture(e.pointerId)) {
+      target.releasePointerCapture(e.pointerId);
+    }
+    dragging = false;
+    dragOffsetPx = 0;
+    onSnapPreview?.(null);
+  }
+
+  function startTrim(e: PointerEvent, side: 'left' | 'right') {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const target = e.currentTarget as HTMLDivElement;
+    target.setPointerCapture(e.pointerId);
+    trimPointerStartX = e.clientX;
+    originalSourceInMs = clip.source_in_ms;
+    originalSourceOutMs = clip.source_out_ms;
+    draftSourceInMs = clip.source_in_ms;
+    draftSourceOutMs = clip.source_out_ms;
+    trimming = side;
+  }
+
+  function moveTrim(e: PointerEvent) {
+    if (!trimming) return;
+    const deltaPx = e.clientX - trimPointerStartX;
+    const deltaMs = pxToMs(deltaPx, pxPerSec);
+    if (trimming === 'left') {
+      const min = 0;
+      const max = originalSourceOutMs - MIN_CLIP_DURATION_MS;
+      draftSourceInMs = Math.min(max, Math.max(min, originalSourceInMs + deltaMs));
+    } else {
+      const min = originalSourceInMs + MIN_CLIP_DURATION_MS;
+      const max = mediaDurationMs > 0 ? mediaDurationMs : originalSourceOutMs;
+      draftSourceOutMs = Math.min(max, Math.max(min, originalSourceOutMs + deltaMs));
+    }
+  }
+
+  async function endTrim(e: PointerEvent) {
+    if (!trimming) return;
+    const target = e.currentTarget as HTMLDivElement;
+    if (target.hasPointerCapture(e.pointerId)) {
+      target.releasePointerCapture(e.pointerId);
+    }
+    const finalIn = Math.round(draftSourceInMs);
+    const finalOut = Math.round(draftSourceOutMs);
+    const changed =
+      finalIn !== Math.round(originalSourceInMs) ||
+      finalOut !== Math.round(originalSourceOutMs);
+    trimming = null;
+    if (changed) {
+      await timelineActions.trimClip(track, clip.id, finalIn, finalOut);
+    }
+  }
+
+  function cancelTrim(e: PointerEvent) {
+    if (!trimming) return;
+    const target = e.currentTarget as HTMLDivElement;
+    if (target.hasPointerCapture(e.pointerId)) {
+      target.releasePointerCapture(e.pointerId);
+    }
+    trimming = null;
+  }
+</script>
+
+<div
+  class="clip"
+  class:video={kind === 'video'}
+  class:audio={kind === 'audio'}
+  class:dragging
+  class:trimming={trimming !== null}
+  class:selected={isSelected}
+  style="left: {renderedLeft}px; width: {renderedWidth}px; transform: translateX({dragOffsetPx}px)"
+  data-clip-id={clip.id}
+  role="button"
+  tabindex="0"
+  aria-label="Clip {clip.id.slice(0, 6)}"
+  onpointerdown={handlePointerDown}
+  onpointermove={handlePointerMove}
+  onpointerup={handlePointerUp}
+  onpointercancel={handlePointerCancel}
+>
+  {#if kind === 'video'}
+    <ClipFilmstrip
+      mediaId={clip.media_id}
+      sourceInMs={trimming ? draftSourceInMs : clip.source_in_ms}
+      sourceOutMs={trimming ? draftSourceOutMs : clip.source_out_ms}
+      {pxPerSec}
+    />
+  {/if}
+  {#if hasAudio}
+    <ClipWaveform
+      mediaId={clip.media_id}
+      sourceInMs={trimming ? draftSourceInMs : clip.source_in_ms}
+      sourceOutMs={trimming ? draftSourceOutMs : clip.source_out_ms}
+      {pxPerSec}
+    />
+  {:else if kind === 'audio'}
+    <span class="no-audio">no audio</span>
+  {/if}
+  <div
+    class="trim-handle trim-handle-left"
+    role="slider"
+    tabindex="0"
+    aria-label="Trim clip start"
+    aria-valuemin={0}
+    aria-valuemax={clip.source_out_ms}
+    aria-valuenow={trimming === 'left' ? draftSourceInMs : clip.source_in_ms}
+    onpointerdown={(e) => startTrim(e, 'left')}
+    onpointermove={moveTrim}
+    onpointerup={endTrim}
+    onpointercancel={cancelTrim}
+  ></div>
+  <span class="label">{clip.id.slice(0, 6)}</span>
+  <div
+    class="trim-handle trim-handle-right"
+    role="slider"
+    tabindex="0"
+    aria-label="Trim clip end"
+    aria-valuemin={clip.source_in_ms}
+    aria-valuemax={mediaDurationMs > 0 ? mediaDurationMs : clip.source_out_ms}
+    aria-valuenow={trimming === 'right' ? draftSourceOutMs : clip.source_out_ms}
+    onpointerdown={(e) => startTrim(e, 'right')}
+    onpointermove={moveTrim}
+    onpointerup={endTrim}
+    onpointercancel={cancelTrim}
+  ></div>
+</div>
+
+<style>
+  .clip {
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    border-radius: 3px;
+    background: #2a4d8f;
+    border: 1px solid #3b6bc9;
+    overflow: hidden;
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+  }
+  .clip.audio {
+    background: #2a6a4d;
+    border-color: #3b9b6c;
+  }
+  .clip:hover {
+    filter: brightness(1.15);
+  }
+  .clip.dragging {
+    cursor: grabbing;
+    z-index: 2;
+    filter: brightness(1.2);
+  }
+  .clip.trimming {
+    z-index: 2;
+    filter: brightness(1.2);
+  }
+  .clip.selected {
+    outline: 2px solid #ffcb47;
+    outline-offset: 1px;
+    z-index: 3;
+  }
+  .label {
+    position: relative;
+    display: block;
+    padding: 0.15rem 0.35rem;
+    font-size: 0.7rem;
+    color: #e6edf3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+    text-shadow: 0 0 2px rgba(0, 0, 0, 0.85);
+    z-index: 1;
+  }
+  .no-audio {
+    position: absolute;
+    right: 0.35rem;
+    bottom: 0.15rem;
+    font-size: 0.6rem;
+    color: rgba(230, 237, 243, 0.55);
+    pointer-events: none;
+    text-shadow: 0 0 2px rgba(0, 0, 0, 0.85);
+    z-index: 1;
+  }
+  .trim-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 6px;
+    cursor: ew-resize;
+    touch-action: none;
+    background: transparent;
+    z-index: 1;
+  }
+  .trim-handle:hover,
+  .trim-handle:focus-visible {
+    background: rgba(255, 255, 255, 0.35);
+    outline: none;
+  }
+  .trim-handle-left {
+    left: 0;
+  }
+  .trim-handle-right {
+    right: 0;
+  }
+</style>

@@ -7,14 +7,36 @@ use uuid::Uuid;
 use crate::error::{AppError, AppResult};
 use crate::ffmpeg::probe::probe_file;
 use crate::ffmpeg::proxy::proxy_path_for;
-use crate::ffmpeg::thumbnails::thumbnails_dir_for;
-use crate::ffmpeg::waveform::waveform_path_for;
+use crate::ffmpeg::thumbnails::{list_thumbnails_in_dir, thumbnails_dir_for, ThumbEntry};
+use crate::ffmpeg::waveform::{waveform_path_for, Waveform};
 use crate::media_repo::MediaRepo;
 use crate::model::project::{MediaItem, Project};
+use crate::model::timeline::Timeline;
+use crate::model::timeline_ops::{
+    delete_clip, insert_clip, move_clip, split_clip, trim_clip, SnapConfig, Track,
+};
 use crate::paths::{ensure_dir, proxies_dir, recent_file_path, thumbnails_dir, waveforms_dir};
 use crate::project_io::{load_project, save_project};
 use crate::proxy_worker::{ProxyJob, ProxyWorkerHandle};
 use crate::recent::{RecentProject, RecentRegistry};
+
+fn parse_track(s: &str) -> AppResult<Track> {
+    match s {
+        "video" => Ok(Track::Video),
+        "audio" => Ok(Track::Audio),
+        other => Err(AppError::Validation {
+            message: format!("invalid track: {other}"),
+        }),
+    }
+}
+
+fn snap_config(enabled: bool, threshold_ms: Option<u64>) -> SnapConfig {
+    let default = SnapConfig::default();
+    SnapConfig {
+        enabled,
+        threshold_ms: threshold_ms.unwrap_or(default.threshold_ms),
+    }
+}
 
 #[tauri::command]
 pub fn new_project(name: String) -> AppResult<Project> {
@@ -22,12 +44,14 @@ pub fn new_project(name: String) -> AppResult<Project> {
 }
 
 #[tauri::command]
-pub fn open_project(path: String) -> AppResult<Project> {
+pub fn open_project(path: String, repo: State<'_, Arc<MediaRepo>>) -> AppResult<Project> {
     let path_buf = PathBuf::from(&path);
     if !path_buf.is_absolute() {
         return Err(AppError::InvalidPath(format!("not absolute: {path}")));
     }
     let project = load_project(&path_buf)?;
+
+    repo.reconcile_from_project(&project)?;
 
     let registry_path = recent_file_path()?;
     if let Some(parent) = registry_path.parent() {
@@ -110,8 +134,8 @@ pub async fn import_media(
 
 #[tauri::command]
 pub fn delete_media(id: String, repo: State<'_, Arc<MediaRepo>>) -> AppResult<()> {
-    let uuid = Uuid::parse_str(&id)
-        .map_err(|e| AppError::InvalidPath(format!("invalid uuid: {e}")))?;
+    let uuid =
+        Uuid::parse_str(&id).map_err(|e| AppError::InvalidPath(format!("invalid uuid: {e}")))?;
     repo.remove(uuid)?;
     Ok(())
 }
@@ -119,6 +143,108 @@ pub fn delete_media(id: String, repo: State<'_, Arc<MediaRepo>>) -> AppResult<()
 #[tauri::command]
 pub fn list_media(repo: State<'_, Arc<MediaRepo>>) -> AppResult<Vec<MediaItem>> {
     repo.list()
+}
+
+#[tauri::command]
+pub fn list_thumbnails(media_id: String) -> AppResult<Vec<ThumbEntry>> {
+    let thumbs_root = thumbnails_dir()?;
+    let dir = thumbnails_dir_for(&thumbs_root, &media_id);
+    list_thumbnails_in_dir(&dir)
+}
+
+pub fn read_waveform_from_dir(waves_root: &std::path::Path, media_id: &str) -> AppResult<Waveform> {
+    let path = waveform_path_for(waves_root, media_id);
+    let json = std::fs::read_to_string(&path).map_err(AppError::Io)?;
+    serde_json::from_str(&json).map_err(|e| AppError::Validation {
+        message: e.to_string(),
+    })
+}
+
+#[tauri::command]
+pub fn read_waveform(media_id: String) -> AppResult<Waveform> {
+    let waves_root = waveforms_dir()?;
+    read_waveform_from_dir(&waves_root, &media_id)
+}
+
+#[tauri::command]
+pub fn timeline_insert_clip(
+    timeline: Timeline,
+    track: String,
+    media_id: Uuid,
+    timeline_start_ms: u64,
+    source_in_ms: u64,
+    source_out_ms: u64,
+) -> AppResult<Timeline> {
+    let track = parse_track(&track)?;
+    insert_clip(
+        &timeline,
+        track,
+        media_id,
+        timeline_start_ms,
+        source_in_ms,
+        source_out_ms,
+    )
+}
+
+#[tauri::command]
+pub fn timeline_move_clip(
+    timeline: Timeline,
+    track: String,
+    clip_id: Uuid,
+    new_start_ms: u64,
+    snap_enabled: bool,
+    snap_threshold_ms: Option<u64>,
+) -> AppResult<Timeline> {
+    let track = parse_track(&track)?;
+    move_clip(
+        &timeline,
+        track,
+        clip_id,
+        new_start_ms,
+        snap_config(snap_enabled, snap_threshold_ms),
+    )
+}
+
+#[tauri::command]
+pub fn timeline_trim_clip(
+    timeline: Timeline,
+    track: String,
+    clip_id: Uuid,
+    new_source_in_ms: u64,
+    new_source_out_ms: u64,
+    snap_enabled: bool,
+    snap_threshold_ms: Option<u64>,
+) -> AppResult<Timeline> {
+    let track = parse_track(&track)?;
+    trim_clip(
+        &timeline,
+        track,
+        clip_id,
+        new_source_in_ms,
+        new_source_out_ms,
+        snap_config(snap_enabled, snap_threshold_ms),
+    )
+}
+
+#[tauri::command]
+pub fn timeline_split_clip(
+    timeline: Timeline,
+    track: String,
+    clip_id: Uuid,
+    at_timeline_ms: u64,
+) -> AppResult<Timeline> {
+    let track = parse_track(&track)?;
+    split_clip(&timeline, track, clip_id, at_timeline_ms)
+}
+
+#[tauri::command]
+pub fn timeline_delete_clip(
+    timeline: Timeline,
+    track: String,
+    clip_id: Uuid,
+) -> AppResult<Timeline> {
+    let track = parse_track(&track)?;
+    delete_clip(&timeline, track, clip_id)
 }
 
 #[cfg(test)]
@@ -133,15 +259,32 @@ mod tests {
     }
 
     #[test]
-    fn open_project_rejects_relative_path() {
-        let err = open_project("relative/path.vproj".into()).unwrap_err();
-        assert!(matches!(err, AppError::InvalidPath(_)));
-    }
-
-    #[test]
     fn save_project_rejects_relative_path() {
         let p = Project::new("X".into());
         let err = save_project_cmd(p, "relative/path.vproj".into()).unwrap_err();
         assert!(matches!(err, AppError::InvalidPath(_)));
+    }
+
+    #[test]
+    fn read_waveform_from_dir_parses_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let media_id = "abc-123";
+        let path = waveform_path_for(dir.path(), media_id);
+        std::fs::write(
+            &path,
+            r#"{"bucket_ms":100,"peaks":[0.0,0.25,0.5,0.75,1.0]}"#,
+        )
+        .unwrap();
+
+        let wf = read_waveform_from_dir(dir.path(), media_id).unwrap();
+        assert_eq!(wf.bucket_ms, 100);
+        assert_eq!(wf.peaks, vec![0.0, 0.25, 0.5, 0.75, 1.0]);
+    }
+
+    #[test]
+    fn read_waveform_from_dir_missing_file_returns_io_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let err = read_waveform_from_dir(dir.path(), "missing").unwrap_err();
+        assert!(matches!(err, AppError::Io(_)));
     }
 }

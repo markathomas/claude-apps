@@ -36,6 +36,13 @@ pub fn run() {
             commands::import_media,
             commands::delete_media,
             commands::list_media,
+            commands::list_thumbnails,
+            commands::read_waveform,
+            commands::timeline_insert_clip,
+            commands::timeline_move_clip,
+            commands::timeline_trim_clip,
+            commands::timeline_split_clip,
+            commands::timeline_delete_clip,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

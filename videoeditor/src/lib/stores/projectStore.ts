@@ -1,6 +1,6 @@
 import { writable, get } from 'svelte/store';
 import { ipc } from '$lib/ipc';
-import type { Project } from '$lib/types';
+import type { Project, Timeline } from '$lib/types';
 
 export interface ProjectState {
   project: Project | null;
@@ -46,5 +46,11 @@ export const projectActions = {
 
   setProject(project: Project): void {
     projectStore.update((s) => ({ ...s, project, dirty: true }));
+  },
+
+  setTimeline(timeline: Timeline): void {
+    projectStore.update((s) =>
+      s.project ? { ...s, project: { ...s.project, timeline }, dirty: true } : s,
+    );
   },
 };

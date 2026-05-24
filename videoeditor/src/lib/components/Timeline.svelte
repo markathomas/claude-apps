@@ -1,17 +1,20 @@
 <script lang="ts">
   import { timelineStore, timelineActions } from '$lib/stores/timelineStore';
+  import { playheadStore, playheadActions } from '$lib/stores/playheadStore';
   import TimelineRuler from './TimelineRuler.svelte';
   import TimelineTrack from './TimelineTrack.svelte';
 
   const PX_PER_SEC = 60;
-  const PLAYHEAD_MS = 0;
 
   const timeline = $derived($timelineStore.timeline);
+  const playheadMs = $derived($playheadStore.playheadMs);
+  const playing = $derived($playheadStore.playing);
+
   const totalSeconds = $derived(
     Math.max(10, Math.ceil(timeline.duration_ms / 1000) + 5),
   );
   const widthPx = $derived(totalSeconds * PX_PER_SEC);
-  const playheadPx = $derived((PLAYHEAD_MS / 1000) * PX_PER_SEC);
+  const playheadPx = $derived((playheadMs / 1000) * PX_PER_SEC);
 
   function isEditableTarget(target: EventTarget | null): boolean {
     if (!(target instanceof HTMLElement)) return false;
@@ -19,6 +22,10 @@
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
     if (target.isContentEditable) return true;
     return false;
+  }
+
+  function handleRulerScrub(ms: number) {
+    playheadActions.seek(ms, timeline.duration_ms);
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -44,9 +51,19 @@
 
     if (cmdOrCtrl) return;
 
+    if (e.key === ' ') {
+      e.preventDefault();
+      if (playing) {
+        playheadActions.pause();
+      } else if (timeline.duration_ms > 0) {
+        playheadActions.play(timeline.duration_ms);
+      }
+      return;
+    }
+
     if (e.key === 's' || e.key === 'S') {
       e.preventDefault();
-      void timelineActions.splitSelectedAt(PLAYHEAD_MS);
+      void timelineActions.splitSelectedAt(playheadMs);
       return;
     }
 
@@ -69,7 +86,11 @@
 >
   <div class="scroll">
     <div class="content" style="width: {widthPx}px">
-      <TimelineRuler durationMs={timeline.duration_ms} pxPerSec={PX_PER_SEC} />
+      <TimelineRuler
+        durationMs={timeline.duration_ms}
+        pxPerSec={PX_PER_SEC}
+        onScrub={handleRulerScrub}
+      />
       <TimelineTrack
         kind="video"
         clips={timeline.video_track}

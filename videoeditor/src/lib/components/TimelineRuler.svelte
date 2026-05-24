@@ -2,9 +2,10 @@
   interface Props {
     durationMs: number;
     pxPerSec: number;
+    onScrub?: (ms: number) => void;
   }
 
-  const { durationMs, pxPerSec }: Props = $props();
+  const { durationMs, pxPerSec, onScrub }: Props = $props();
 
   const totalSeconds = $derived(Math.max(10, Math.ceil(durationMs / 1000) + 5));
   const ticks = $derived(
@@ -20,9 +21,44 @@
     const s = sec % 60;
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
+
+  function msFromPointer(e: PointerEvent, el: HTMLElement): number {
+    const rect = el.getBoundingClientRect();
+    const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+    return (x / pxPerSec) * 1000;
+  }
+
+  function onPointerDown(e: PointerEvent) {
+    if (!onScrub) return;
+    const target = e.currentTarget as HTMLElement;
+    target.setPointerCapture(e.pointerId);
+    onScrub(msFromPointer(e, target));
+  }
+
+  function onPointerMove(e: PointerEvent) {
+    if (!onScrub) return;
+    const target = e.currentTarget as HTMLElement;
+    if (!target.hasPointerCapture(e.pointerId)) return;
+    onScrub(msFromPointer(e, target));
+  }
+
+  function onPointerUp(e: PointerEvent) {
+    const target = e.currentTarget as HTMLElement;
+    if (target.hasPointerCapture(e.pointerId)) {
+      target.releasePointerCapture(e.pointerId);
+    }
+  }
 </script>
 
-<div class="ruler" style="width: {widthPx}px">
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+  class="ruler"
+  style="width: {widthPx}px"
+  onpointerdown={onPointerDown}
+  onpointermove={onPointerMove}
+  onpointerup={onPointerUp}
+  onpointercancel={onPointerUp}
+>
   {#each ticks as t (t.sec)}
     <div
       class="tick"
@@ -44,6 +80,8 @@
     border-bottom: 1px solid #2a2a2a;
     flex-shrink: 0;
     user-select: none;
+    cursor: pointer;
+    touch-action: none;
   }
   .tick {
     position: absolute;

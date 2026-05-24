@@ -2,12 +2,39 @@
   import { untrack } from 'svelte';
   import { convertFileSrc } from '@tauri-apps/api/core';
   import { mediaStore, selectedPreviewSource } from '$lib/stores/mediaStore';
+  import { timelineStore } from '$lib/stores/timelineStore';
+  import { playheadStore, activeClipAt } from '$lib/stores/playheadStore';
+  import type { VideoClip, AudioClip, MediaItem } from '$lib/types';
 
+  let videoEl: HTMLVideoElement | null = $state(null);
   let blobUrl = $state<string | null>(null);
   let loadErr = $state<string>('');
   let status = $state<string>('');
 
-  let assetSrc = $derived($selectedPreviewSource ? convertFileSrc($selectedPreviewSource.proxyPath) : null);
+  const timeline = $derived($timelineStore.timeline);
+  const playheadMs = $derived($playheadStore.playheadMs);
+  const playing = $derived($playheadStore.playing);
+
+  const active = $derived(activeClipAt(timeline, playheadMs));
+
+  function findMedia(mediaId: string): MediaItem | undefined {
+    return $mediaStore.items.find((i) => i.id === mediaId);
+  }
+
+  const activeMedia = $derived(
+    active ? findMedia(active.clip.media_id) : undefined,
+  );
+
+  const fallbackPreview = $derived(active ? null : $selectedPreviewSource);
+
+  const activeProxyPath = $derived(
+    activeMedia && activeMedia.proxy_status === 'ready' && activeMedia.proxy_path
+      ? activeMedia.proxy_path
+      : null,
+  );
+
+  const proxyPath = $derived(activeProxyPath ?? fallbackPreview?.proxyPath ?? null);
+  const assetSrc = $derived(proxyPath ? convertFileSrc(proxyPath) : null);
 
   $effect(() => {
     const src = assetSrc;
@@ -45,6 +72,31 @@
     };
   });
 
+  $effect(() => {
+    const v = videoEl;
+    if (!v || !active) return;
+    const clip = active.clip as VideoClip | AudioClip;
+    const targetSec =
+      (playheadMs - clip.timeline_start_ms + clip.source_in_ms) / 1000;
+    if (Math.abs(v.currentTime - targetSec) > 0.05) {
+      try {
+        v.currentTime = targetSec;
+      } catch {
+        // ignore — happens before metadata is loaded
+      }
+    }
+  });
+
+  $effect(() => {
+    const v = videoEl;
+    if (!v) return;
+    if (playing && active) {
+      void v.play().catch(() => {});
+    } else {
+      v.pause();
+    }
+  });
+
   function onVideoError(e: Event) {
     const v = e.currentTarget as HTMLVideoElement;
     const codes = ['', 'ABORTED', 'NETWORK', 'DECODE', 'SRC_NOT_SUPPORTED'];
@@ -54,26 +106,37 @@
 </script>
 
 <section class="pane preview">
-  {#if $selectedPreviewSource && blobUrl}
+  {#if proxyPath && blobUrl}
     {#key blobUrl}
-      <video class="video" src={blobUrl} controls onerror={onVideoError}>
+      <video
+        class="video"
+        src={blobUrl}
+        bind:this={videoEl}
+        onerror={onVideoError}
+      >
         <track kind="captions" />
       </video>
     {/key}
-  {:else if $selectedPreviewSource}
+  {:else if proxyPath}
     <div class="canvas">
       <p class="placeholder">{loadErr || status || 'Loading proxy…'}</p>
     </div>
   {:else}
     <div class="canvas">
       <p class="placeholder">
-        {#if $mediaStore.selectedId}Proxy not ready yet.{:else}Select a clip to preview.{/if}
+        {#if timeline.video_track.length > 0 || timeline.audio_track.length > 0}
+          Move the playhead onto a clip to preview.
+        {:else if $mediaStore.selectedId}
+          Proxy not ready yet.
+        {:else}
+          Add a clip to the timeline to preview.
+        {/if}
       </p>
     </div>
   {/if}
-  {#if $selectedPreviewSource && assetSrc}
+  {#if proxyPath && assetSrc}
     <div class="diag">
-      <div>proxy_path: {$selectedPreviewSource.proxyPath}</div>
+      <div>proxy_path: {proxyPath}</div>
       <div>asset src: {assetSrc}</div>
       {#if status}<div>{status}</div>{/if}
       {#if loadErr}<div class="err">{loadErr}</div>{/if}

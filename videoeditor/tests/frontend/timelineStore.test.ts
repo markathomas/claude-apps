@@ -262,6 +262,92 @@ describe('timelineActions.insertClipFromMedia', () => {
   });
 });
 
+describe('timelineActions.moveClip', () => {
+  const sourceTimeline: Timeline = {
+    duration_ms: 4000,
+    video_track: [
+      {
+        id: 'clip-1',
+        media_id: 'media-1',
+        source_in_ms: 0,
+        source_out_ms: 4000,
+        timeline_start_ms: 0,
+        volume: 1,
+        muted: false,
+        transition_in: { type: 'cut', duration_ms: 0 },
+        transition_out: { type: 'cut', duration_ms: 0 },
+      },
+    ],
+    audio_track: [],
+    text_track: [],
+  };
+
+  const movedTimeline: Timeline = {
+    ...sourceTimeline,
+    video_track: [
+      {
+        ...sourceTimeline.video_track[0],
+        timeline_start_ms: 2000,
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    mockInvoke.mockReset();
+    projectActions.reset();
+    timelineActions.reset(sourceTimeline);
+  });
+
+  it('invokes timeline_move_clip with snap enabled and applies the result', async () => {
+    mockInvoke.mockResolvedValueOnce(movedTimeline);
+
+    await timelineActions.moveClip('video', 'clip-1', 2000);
+
+    expect(mockInvoke).toHaveBeenCalledWith('timeline_move_clip', {
+      timeline: sourceTimeline,
+      track: 'video',
+      clipId: 'clip-1',
+      newStartMs: 2000,
+      snapEnabled: true,
+      snapThresholdMs: undefined,
+    });
+    expect(get(timelineStore).timeline).toEqual(movedTimeline);
+    expect(get(timelineStore).canUndo).toBe(true);
+  });
+
+  it('clamps newStartMs to >= 0', async () => {
+    mockInvoke.mockResolvedValueOnce(sourceTimeline);
+
+    await timelineActions.moveClip('video', 'clip-1', -500);
+
+    expect(mockInvoke).toHaveBeenCalledWith(
+      'timeline_move_clip',
+      expect.objectContaining({ newStartMs: 0 }),
+    );
+  });
+
+  it('rounds non-integer newStartMs', async () => {
+    mockInvoke.mockResolvedValueOnce(sourceTimeline);
+
+    await timelineActions.moveClip('video', 'clip-1', 1234.7);
+
+    expect(mockInvoke).toHaveBeenCalledWith(
+      'timeline_move_clip',
+      expect.objectContaining({ newStartMs: 1235 }),
+    );
+  });
+
+  it('does not push undo history when the reducer rejects (throws)', async () => {
+    mockInvoke.mockRejectedValueOnce(new Error('overlap'));
+
+    await timelineActions.moveClip('video', 'clip-1', 100);
+
+    const s = get(timelineStore);
+    expect(s.timeline).toEqual(sourceTimeline);
+    expect(s.canUndo).toBe(false);
+  });
+});
+
 describe('projectActions.setTimeline', () => {
   beforeEach(() => {
     mockInvoke.mockReset();

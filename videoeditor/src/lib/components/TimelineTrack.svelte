@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { VideoClip, AudioClip } from '$lib/types';
   import TimelineClip from './TimelineClip.svelte';
-  import { pxToMs } from '$lib/lib/time';
+  import { msToPx, pxToMs } from '$lib/lib/time';
+  import type { SnapEdge } from '$lib/lib/snap';
   import { timelineActions } from '$lib/stores/timelineStore';
 
   interface Props {
@@ -14,6 +15,21 @@
   const { kind, clips, pxPerSec, widthPx }: Props = $props();
 
   const MEDIA_MIME = 'application/x-videoeditor-media-id';
+
+  let snapPreviewMs = $state<number | null>(null);
+
+  function edgesExcluding(clipId: string): SnapEdge[] {
+    const edges: SnapEdge[] = [];
+    for (const c of clips) {
+      if (c.id === clipId) continue;
+      edges.push({ ms: c.timeline_start_ms, source: 'start' });
+      edges.push({
+        ms: c.timeline_start_ms + (c.source_out_ms - c.source_in_ms),
+        source: 'end',
+      });
+    }
+    return edges;
+  }
 
   function handleDragOver(e: DragEvent) {
     if (kind !== 'video') return;
@@ -49,8 +65,22 @@
   ondrop={handleDrop}
 >
   {#each clips as clip (clip.id)}
-    <TimelineClip {clip} {pxPerSec} {kind} />
+    <TimelineClip
+      {clip}
+      {pxPerSec}
+      {kind}
+      track={kind}
+      siblingEdges={edgesExcluding(clip.id)}
+      onSnapPreview={(ms) => (snapPreviewMs = ms)}
+    />
   {/each}
+  {#if snapPreviewMs !== null}
+    <div
+      class="snap-line"
+      style="left: {msToPx(snapPreviewMs, pxPerSec)}px"
+      aria-hidden="true"
+    ></div>
+  {/if}
 </div>
 
 <style>
@@ -64,5 +94,14 @@
   .track.audio {
     height: 44px;
     background: #131715;
+  }
+  .snap-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: #ffcb47;
+    box-shadow: 0 0 4px rgba(255, 203, 71, 0.7);
+    pointer-events: none;
   }
 </style>

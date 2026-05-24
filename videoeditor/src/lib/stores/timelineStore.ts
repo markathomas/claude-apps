@@ -1,6 +1,6 @@
 import { writable, get } from 'svelte/store';
 import type { Timeline } from '$lib/types';
-import { ipc } from '$lib/ipc';
+import { ipc, type TimelineTrack } from '$lib/ipc';
 import { mediaStore } from './mediaStore';
 import { projectActions } from './projectStore';
 
@@ -81,6 +81,29 @@ export const timelineActions = {
     undoStack.push(current);
     publish(next);
     projectActions.setTimeline(next);
+  },
+
+  async moveClip(
+    track: TimelineTrack,
+    clipId: string,
+    newStartMs: number,
+  ): Promise<void> {
+    const startMs = Math.max(0, Math.round(newStartMs));
+    const current = get(internal).timeline;
+    try {
+      const next = await ipc.timelineMoveClip(
+        current,
+        track,
+        clipId,
+        startMs,
+        true,
+        undefined,
+      );
+      timelineActions.apply(next);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('moveClip failed:', message);
+    }
   },
 
   async insertClipFromMedia(mediaId: string, dropMs: number): Promise<void> {

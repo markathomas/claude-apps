@@ -1,5 +1,7 @@
-import { writable } from 'svelte/store';
+import { writable, get } from 'svelte/store';
 import type { Timeline } from '$lib/types';
+import { ipc } from '$lib/ipc';
+import { mediaStore } from './mediaStore';
 import { projectActions } from './projectStore';
 
 export const TIMELINE_HISTORY_LIMIT = 100;
@@ -79,5 +81,28 @@ export const timelineActions = {
     undoStack.push(current);
     publish(next);
     projectActions.setTimeline(next);
+  },
+
+  async insertClipFromMedia(mediaId: string, dropMs: number): Promise<void> {
+    const item = get(mediaStore).items.find((i) => i.id === mediaId);
+    if (!item || item.proxy_status !== 'ready' || !item.probe) return;
+
+    const startMs = Math.max(0, Math.round(dropMs));
+    const current = get(internal).timeline;
+
+    try {
+      const next = await ipc.timelineInsertClip(
+        current,
+        'video',
+        mediaId,
+        startMs,
+        0,
+        item.probe.duration_ms,
+      );
+      timelineActions.apply(next);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('insertClipFromMedia failed:', message);
+    }
   },
 };

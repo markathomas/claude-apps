@@ -46,7 +46,21 @@
   {:else}
     <ul>
       {#each $mediaStore.items as item (item.id)}
-        <li class="item" class:selected={$mediaStore.selectedId === item.id} data-status={item.proxy_status}>
+        <li
+          class="item"
+          class:selected={$mediaStore.selectedId === item.id}
+          class:draggable={item.proxy_status === 'ready'}
+          data-status={item.proxy_status}
+          draggable={item.proxy_status === 'ready'}
+          ondragstart={(e) => {
+            if (item.proxy_status !== 'ready' || !e.dataTransfer) {
+              e.preventDefault();
+              return;
+            }
+            e.dataTransfer.setData('application/x-videoeditor-media-id', item.id);
+            e.dataTransfer.effectAllowed = 'copy';
+          }}
+        >
           <button
             type="button"
             class="item-select"
@@ -103,6 +117,8 @@
     border-left: 3px solid #555; display: flex; align-items: stretch;
   }
   .item.selected { background: #252d3a; outline: 1px solid #2563eb; }
+  .item.draggable { cursor: grab; }
+  .item.draggable:active { cursor: grabbing; }
   .item[data-status="ready"] { border-left-color: #22c55e; }
   .item[data-status="failed"] { border-left-color: #ef4444; }
   .item[data-status="generating"] { border-left-color: #2563eb; }
